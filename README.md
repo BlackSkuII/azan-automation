@@ -11,7 +11,7 @@ Fetches daily prayer times from the [Aladhan API](https://aladhan.com/prayer-tim
 No prerequisites — just run:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/azan-automation.git
+git clone https://github.com/BlackSkuII/azan-automation.git
 cd azan-automation
 ./setup.sh
 ```
