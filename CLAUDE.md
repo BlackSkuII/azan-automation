@@ -11,7 +11,8 @@ azan-automation/
 │   ├── config.py       # config.yaml loader
 │   ├── discovery.py    # catt scan wrapper
 │   ├── player.py       # azan playback via catt
-│   ├── scheduler.py    # prayer time API + cron setup
+│   ├── prayer_times.py # Aladhan API (masjid's exact query)
+│   ├── scheduler.py    # cron job generation
 │   └── tv_control.py   # Home Assistant TV pause/resume
 ├── audio/              # Azan MP3 files
 ├── check_device.py     # Scan Google Home, reboot if not found
@@ -23,6 +24,12 @@ azan-automation/
 ├── wifi-logger.sh      # WiFi event logger (NM dispatcher)
 └── config.yaml        # Runtime config (created by installer)
 ```
+
+## Prayer Times Source
+Aladhan API, fixed masjid location (no device GPS): `latitude=42.3601`,
+`longitude=-71.0589`, `method=2` (ISNA), `school=1` (Hanafi) — identical to the
+masjid website/app at zamongajumath.com. Defaults live in
+`azan/prayer_times.py`; overridable via `config.yaml`.
 
 ## Common Commands
 

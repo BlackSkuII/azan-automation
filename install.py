@@ -82,24 +82,42 @@ def main():
         if sp not in sys.path:
             sys.path.insert(0, sp)
 
-    from azan import config, discovery, welcome
+    from azan import config, discovery, prayer_times, welcome
     from azan.scheduler import write_cron
 
     cfg = config.load_config()
 
-    step(4, total_steps, "Location")
-    cfg["city"] = config.get_or_prompt(cfg, "city", "City")
-    cfg["country"] = config.get_or_prompt(cfg, "country", "Country")
+    step(4, total_steps, "Masjid location & calculation")
+    cfg["masjid_name"] = config.get_or_prompt(
+        cfg, "masjid_name", "Masjid name (for logs)",
+    )
+    cfg["latitude"] = float(config.get_or_prompt(
+        cfg, "latitude", "Latitude of the masjid",
+    ))
+    cfg["longitude"] = float(config.get_or_prompt(
+        cfg, "longitude", "Longitude of the masjid",
+    ))
     cfg["method"] = int(config.get_or_prompt(
         cfg, "method",
-        "Calculation method (1=Karachi/Hanafi, 2=ISNA, 3=MWL)",
+        "Calculation method (1=Karachi, 2=ISNA, 3=MWL, 4=Umm Al-Qura, 5=Egyptian)",
     ))
-    if cfg["method"] == 1:
-        cfg["school"] = 1
-    else:
-        cfg["school"] = int(config.get_or_prompt(cfg, "school", "School (0=Shafi, 1=Hanafi)"))
+    cfg["school"] = int(config.get_or_prompt(
+        cfg, "school", "School (0=Shafi, 1=Hanafi)",
+    ))
 
-    print(f"  Saved: {cfg['city']}, {cfg['country']} (method={cfg['method']})")
+    print(
+        f"  Saved: {cfg['masjid_name']} ({cfg['latitude']}, {cfg['longitude']}) "
+        f"method={cfg['method']}, school={cfg['school']}"
+    )
+
+    # Show today's times so the masjid's API settings can be confirmed now.
+    try:
+        times = prayer_times.fetch_prayer_times(
+            cfg["latitude"], cfg["longitude"], cfg["method"], cfg["school"],
+        )
+        print("  Today: " + ", ".join(f"{k} {v}" for k, v in times.items()))
+    except Exception as e:
+        print(f"  (Could not fetch prayer times yet: {e})")
 
     step(5, total_steps, "Google Home Device")
     if config.get(cfg, "device_name"):

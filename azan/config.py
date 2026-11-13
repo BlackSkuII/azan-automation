@@ -9,10 +9,13 @@ CONFIG_FILE = os.path.join(project_root(), "config.yaml")
 CONFIG_EXAMPLE = os.path.join(project_root(), "config.yaml.example")
 
 DEFAULTS = {
-    "city": "Gurgaon",
-    "country": "India",
-    "method": 1,
-    "school": 1,
+    # Masjid location and calculation settings — these match the masjid's
+    # website/app so the azan fires at the same times shown there.
+    "masjid_name": "Allston Brighton Islamic Center",
+    "latitude": 42.3601,
+    "longitude": -71.0589,
+    "method": 2,  # ISNA (North America)
+    "school": 1,  # Hanafi
     "volume": "100",
     "scan_before_minutes": 5,
     "device_name": "",
@@ -27,11 +30,31 @@ DEFAULTS = {
 }
 
 
+def upgrade_legacy_config(cfg):
+    """Bring old city-based configs in line with the masjid's settings.
+
+    Earlier versions configured a city/country and defaulted to method=1
+    (Karachi). Those configs have no latitude/longitude, so their times would
+    not match the masjid. When we see that shape, switch the location and
+    calculation settings to the masjid defaults (ISNA + Hanafi).
+    """
+    if not cfg:
+        return cfg
+
+    is_legacy = "latitude" not in cfg and ("city" in cfg or "country" in cfg)
+    if not is_legacy:
+        return cfg
+
+    for key in ("masjid_name", "latitude", "longitude", "method", "school"):
+        cfg[key] = DEFAULTS[key]
+    return cfg
+
+
 def load_config():
     """Load config.yaml. Returns empty dict if not found."""
     try:
         with open(CONFIG_FILE) as f:
-            return yaml.safe_load(f) or {}
+            return upgrade_legacy_config(yaml.safe_load(f) or {})
     except FileNotFoundError:
         return {}
 
