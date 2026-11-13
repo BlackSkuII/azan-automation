@@ -18,15 +18,22 @@ def main():
 
     cfg = config.load_config_or_exit()
 
-    city = config.get(cfg, "city")
-    country = config.get(cfg, "country")
+    masjid_name = config.get(cfg, "masjid_name")
+    latitude = float(config.get(cfg, "latitude"))
+    longitude = float(config.get(cfg, "longitude"))
     method = int(config.get(cfg, "method"))
     school = int(config.get(cfg, "school"))
 
-    print(f"[{datetime.now()}] Fetching prayer times for {city}, {country}...")
+    print(
+        f"[{datetime.now()}] Fetching prayer times for {masjid_name} "
+        f"({latitude}, {longitude}) "
+        f"[method={method}, school={school}]..."
+    )
 
     try:
-        times = prayer_times.fetch_prayer_times(city, country, method, school)
+        times = prayer_times.fetch_prayer_times(
+            latitude, longitude, method, school,
+        )
     except Exception as e:
         print(f"ERROR fetching prayer times: {e}")
         sys.exit(1)
