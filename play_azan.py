@@ -41,27 +41,25 @@ def main():
     except Exception:
         pass
 
-    log(f"Playing {'Fajr ' if is_fajr else ''}Azan on {device_name}...")
-    success = player.play_azan(get_venv_catt(), device_name, azan_file, volume)
+    catt_path = get_venv_catt()
+    try:
+        log(f"Playing {'Fajr ' if is_fajr else ''}Azan on {device_name}...")
+        success = player.play_azan(catt_path, device_name, azan_file, volume)
+        if not success:
+            sys.exit(1)
 
-    if not success:
+        time.sleep(duration)
+        log("Azan playback completed.")
+    finally:
+        if not player.set_volume(catt_path, device_name, 100):
+            log("WARNING: Failed to reset speaker volume to 100.")
         if tv_was_active:
             try:
+                log("Resuming TV...")
                 tv_control.resume_tv(cfg)
             except Exception:
                 pass
-        sys.exit(1)
 
-    time.sleep(duration)
-
-    log("Azan playback completed.")
-
-    if tv_was_active:
-        try:
-            log("Resuming TV...")
-            tv_control.resume_tv(cfg)
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":
