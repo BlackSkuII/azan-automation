@@ -6,6 +6,6 @@ school: 1
 device_name: 192.168.1.246
 azan_duration: 136
 fajr_azan_duration: 150
-volume: '40'
-fajr_volume: '40'
+fajr_volume: '35'
+volume: '50'
 scan_before_minutes: 5
