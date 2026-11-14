@@ -15,6 +15,7 @@ device_name: "Living Room speaker"
 
 # Playback
 volume: "100"
+fajr_volume: "100"  # omit to use the regular volume for Fajr
 azan_file: audio/azan.mp3
 fajr_azan_file: audio/fajr_azan.mp3
 azan_duration: 136           # seconds — match your azan.mp3 length + 3s buffer

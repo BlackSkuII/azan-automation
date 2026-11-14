@@ -82,7 +82,8 @@ Settings include:
 | `method` | 2 | Prayer calculation method (2 = ISNA) |
 | `school` | 1 | 0=Shafi, 1=Hanafi (1 = Hanafi asr) |
 | `device_name` | — | Google Home device name |
-| `volume` | 100 | Volume level during Azan (0-100); reset to 100 afterward |
+| `volume` | 100 | Volume during non-Fajr Azans (0-100); reset to 100 afterward |
+| `fajr_volume` | Same as `volume` | Volume during Fajr Azan (0-100); reset to 100 afterward |
 | `azan_file` | audio/azan.mp3 | Path to regular azan audio |
 | `fajr_azan_file` | audio/fajr_azan.mp3 | Path to Fajr azan audio |
 | `scan_before_minutes` | 5 | Minutes before prayer to check device |
@@ -130,7 +131,7 @@ python3 setup_cron.py
 # Preview cron without writing
 python3 setup_cron.py --dry-run
 
-# Play azan manually
+# Play azan manually (the supplied volume overrides config for that run)
 venv/bin/python play_azan.py 100
 venv/bin/python play_azan.py 100 fajr
 

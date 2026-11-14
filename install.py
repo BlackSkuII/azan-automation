@@ -197,6 +197,9 @@ def main():
     cfg["azan_duration"] = int(config.get_or_prompt(cfg, "azan_duration", "Azan duration in seconds"))
     cfg["fajr_azan_duration"] = int(config.get_or_prompt(cfg, "fajr_azan_duration", "Fajr azan duration in seconds"))
     cfg["volume"] = config.get_or_prompt(cfg, "volume", "Volume (0-100)")
+    cfg["fajr_volume"] = config.get_or_prompt(
+        cfg, "fajr_volume", "Fajr volume (0-100)", default=cfg["volume"],
+    )
     cfg["scan_before_minutes"] = int(config.get_or_prompt(cfg, "scan_before_minutes", "Minutes before prayer to scan device"))
 
     config.save_config(cfg)

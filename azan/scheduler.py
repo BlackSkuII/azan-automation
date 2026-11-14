@@ -24,8 +24,12 @@ def generate_cron_jobs(cfg, prayer_times):
         scan_cmd = f"{python} {root}/check_device.py >> {log_file} 2>&1"
         jobs.append(f"{scan_minute} {scan_hour} * * * {scan_cmd}")
 
-        fajr_flag = " fajr" if name == "Fajr" else ""
-        azan_cmd = f"{python} {root}/play_azan.py {volume}{fajr_flag} >> {log_file} 2>&1"
+        is_fajr = name == "Fajr"
+        fajr_flag = " fajr" if is_fajr else ""
+        prayer_volume = cfg.get("fajr_volume") if is_fajr else None
+        if prayer_volume is None:
+            prayer_volume = volume
+        azan_cmd = f"{python} {root}/play_azan.py {prayer_volume}{fajr_flag} >> {log_file} 2>&1"
         jobs.append(f"{minute} {hour} * * * {azan_cmd}")
 
     return jobs
