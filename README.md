@@ -60,7 +60,19 @@ Daily @ Midnight + @Reboot
 
 ## Configuration
 
-Config is stored in `config.yaml` (created by installer or manually from `config.yaml.example`):
+Shared settings are stored in the tracked `config.yaml`, which you can edit on GitHub and pull onto your Pi. The optional `config.local.yaml` is ignored by Git and overrides shared settings. Keep secrets such as `ha_token` only in `config.local.yaml` (the installer saves the token there). Never commit tokens to GitHub.
+
+To update an existing Pi for the first time, back up its old ignored config **outside the repository** before pulling, because it would otherwise conflict with the new tracked file:
+
+```bash
+cp config.yaml ~/azan-config-backup.yaml
+rm config.yaml
+git pull
+```
+
+If the old config contains a Home Assistant token, copy it into `config.local.yaml` on the Pi (for example, `ha_token: "your-token"`); also copy any other settings you want to override locally. Treat the backup as sensitive. After editing `config.yaml` on GitHub and pulling, run `venv/bin/python setup_cron.py` to apply changes to the schedule and the volume stored in existing cron jobs immediately. Otherwise, cron refreshes at midnight or reboot. The installer can also modify the tracked config locally, so commit or back up local changes before pulling.
+
+Settings include:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -75,7 +87,7 @@ Config is stored in `config.yaml` (created by installer or manually from `config
 | `fajr_azan_file` | audio/fajr_azan.mp3 | Path to Fajr azan audio |
 | `scan_before_minutes` | 5 | Minutes before prayer to check device |
 | `ha_url` | — | Home Assistant URL (empty = skip TV control) |
-| `ha_token` | — | HA long-lived access token |
+| `ha_token` | — | HA long-lived access token; store in `config.local.yaml` only |
 | `tv_entity_id` | — | HA media_player entity for TV |
 
 ### Prayer Times API

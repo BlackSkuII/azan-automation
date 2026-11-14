@@ -1,5 +1,5 @@
-# User config (contains HA tokens)
-config.yaml
+# Local configuration (may contain secrets)
+config.local.yaml
 
 # Python
 venv/
