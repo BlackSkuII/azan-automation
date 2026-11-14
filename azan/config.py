@@ -6,6 +6,7 @@ import yaml
 from azan.platform_utils import project_root
 
 CONFIG_FILE = os.path.join(project_root(), "config.yaml")
+LOCAL_CONFIG_FILE = os.path.join(project_root(), "config.local.yaml")
 CONFIG_EXAMPLE = os.path.join(project_root(), "config.yaml.example")
 
 DEFAULTS = {
@@ -51,12 +52,15 @@ def upgrade_legacy_config(cfg):
 
 
 def load_config():
-    """Load config.yaml. Returns empty dict if not found."""
-    try:
-        with open(CONFIG_FILE) as f:
-            return upgrade_legacy_config(yaml.safe_load(f) or {})
-    except FileNotFoundError:
-        return {}
+    """Load shared config, with optional local overrides taking precedence."""
+    cfg = {}
+    for path in (CONFIG_FILE, LOCAL_CONFIG_FILE):
+        try:
+            with open(path) as f:
+                cfg.update(yaml.safe_load(f) or {})
+        except FileNotFoundError:
+            pass
+    return upgrade_legacy_config(cfg)
 
 
 def load_config_or_exit():
@@ -69,9 +73,23 @@ def load_config_or_exit():
 
 
 def save_config(data):
-    """Write config dict to config.yaml."""
+    """Save shared settings separately from the Home Assistant token."""
+    shared = {key: value for key, value in data.items() if key != "ha_token"}
+    local = {}
+    try:
+        with open(LOCAL_CONFIG_FILE) as f:
+            local = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        pass
+    if "ha_token" in data:
+        local["ha_token"] = data["ha_token"]
+    if local:
+        # Create private files with restrictive permissions from the start.
+        fd = os.open(LOCAL_CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            yaml.safe_dump(local, f, default_flow_style=False, sort_keys=False)
     with open(CONFIG_FILE, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+        yaml.safe_dump(shared, f, default_flow_style=False, sort_keys=False)
 
 
 def get(config, key, default=None):

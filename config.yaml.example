@@ -1,5 +1,5 @@
 # Azan Automation Configuration
-# Copy this file to config.yaml and customize.
+# Use this as a reference when customizing config.yaml.
 # Or run: python3 install.py
 
 # Masjid location — the same coordinates/settings the masjid uses on its
@@ -25,7 +25,7 @@ scan_before_minutes: 5
 
 # Home Assistant TV control (optional — leave empty to skip)
 ha_url: ""
-ha_token: ""
+# Put ha_token in the ignored config.local.yaml, not in this file.
 tv_entity_id: ""
 
 # Log file path
