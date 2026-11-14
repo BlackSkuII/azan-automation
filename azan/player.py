@@ -14,7 +14,7 @@ def play_azan(catt_path, device_name, audio_file, volume):
     Returns:
         True if playback started successfully, False otherwise.
     """
-    if not _run(catt_path, device_name, "volume", str(volume)):
+    if not set_volume(catt_path, device_name, volume):
         print("WARNING: Failed to set volume, using current level.")
 
     time.sleep(1)
@@ -24,6 +24,11 @@ def play_azan(catt_path, device_name, audio_file, volume):
         return False
 
     return True
+
+
+def set_volume(catt_path, device_name, volume):
+    """Set the device volume, returning whether the command succeeded."""
+    return _run(catt_path, device_name, "volume", str(volume))
 
 
 def _run(catt_path, device_name, *args):

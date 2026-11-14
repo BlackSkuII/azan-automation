@@ -70,7 +70,7 @@ Config is stored in `config.yaml` (created by installer or manually from `config
 | `method` | 2 | Prayer calculation method (2 = ISNA) |
 | `school` | 1 | 0=Shafi, 1=Hanafi (1 = Hanafi asr) |
 | `device_name` | — | Google Home device name |
-| `volume` | 100 | Volume level (0-100) |
+| `volume` | 100 | Volume level during Azan (0-100); reset to 100 afterward |
 | `azan_file` | audio/azan.mp3 | Path to regular azan audio |
 | `fajr_azan_file` | audio/fajr_azan.mp3 | Path to Fajr azan audio |
 | `scan_before_minutes` | 5 | Minutes before prayer to check device |
