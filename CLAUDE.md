@@ -4,32 +4,39 @@ Automated prayer time (Azan) player for Google Home / Chromecast devices on Rasp
 
 ## Project Structure
 
+One long-running service (`python -m azan`, systemd unit `azan.service`) runs
+the scheduler and a web UI on port 9090. No cron jobs are used any more.
+
 ```
 azan-automation/
-├── azan/               # Core Python package
-│   ├── __init__.py     # log() function with timestamps
-│   ├── config.py       # config.yaml loader
-│   ├── discovery.py    # catt scan wrapper
-│   ├── player.py       # azan playback via catt
-│   ├── prayer_times.py # Aladhan API (masjid's exact query)
-│   ├── scheduler.py    # cron job generation
-│   └── tv_control.py   # Home Assistant TV pause/resume
-├── audio/              # Azan MP3 files
-├── check_device.py     # Scan Google Home, reboot if not found
-├── play_azan.py        # Main playback script (cron target)
-├── setup_cron.py       # Fetch prayer times, update cron
-├── install.py          # Interactive installer
-├── setup.sh            # First-time setup
-├── setup-pi.sh        # Pi one-shot setup (for fresh re-flashes)
-├── wifi-logger.sh      # WiFi event logger (NM dispatcher)
-└── config.yaml        # Runtime config (created by installer)
+├── azan/                 # Python package (stdlib only, plus catt + mutagen)
+│   ├── __main__.py       # entry point: logging, scheduler thread, web server
+│   ├── web.py            # JSON API + serves static/index.html
+│   ├── static/index.html # the whole web UI (vanilla JS, no build step)
+│   ├── scheduler.py      # daily fetch, pre-azan speaker check, azan trigger
+│   ├── player.py         # pause TV → volume → cast (with retries) → restore
+│   ├── cast.py           # catt CLI wrapper (scan, status, volume, cast, stop)
+│   ├── prayer_times.py   # Aladhan API (masjid's exact query)
+│   ├── settings.py       # data/settings.json: defaults, validation, v1 import
+│   ├── audio.py          # audio/ listing, upload, MP3 duration
+│   ├── tv_control.py     # Home Assistant TV pause/resume
+│   └── system.py         # Pi detection, guarded reboot, LAN IP
+├── audio/                # Azan MP3 files
+├── data/                 # settings.json, times.json, state.json (git-ignored)
+├── tests/                # unittest suite, no network/speaker needed
+├── setup.sh              # install/update: venv, systemd unit, removes v1 cron
+├── setup-pi.sh           # Pi one-shot setup (for fresh re-flashes)
+└── wifi-logger.sh        # WiFi event logger (NM dispatcher)
 ```
+
+Settings are edited in the web UI and stored only on the Pi
+(`data/settings.json`). Never add settings files to Git.
 
 ## Prayer Times Source
 Aladhan API, fixed masjid location (no device GPS): `latitude=42.3601`,
 `longitude=-71.0589`, `method=2` (ISNA), `school=1` (Hanafi) — identical to the
 masjid website/app at zamongajumath.com. Defaults live in
-`azan/prayer_times.py`; overridable via `config.yaml`.
+`azan/settings.py`; changed from the web UI (Settings → Masjid & calculation).
 
 ## Common Commands
 
@@ -46,12 +53,13 @@ ssh raspi@10.147.18.185 "tail -30 ~/azan-automation/azan.log"
 ssh raspi@10.147.18.185 "tail -30 ~/azan-automation/wifi.log"
 ```
 
-### Azan Testing (no azan plays during testing)
+### Azan Testing
 ```bash
-ssh raspi@10.147.18.185 "venv/bin/python ~/azan-automation/check_device.py"
-ssh raspi@10.147.18.185 "venv/bin/python ~/azan-automation/setup_cron.py --dry-run"
-ssh raspi@10.147.18.185 "crontab -l"
+venv/bin/python -m unittest discover -s tests -t .     # local, no network
+ssh raspi@10.147.18.185 "systemctl status azan --no-pager"
+ssh raspi@10.147.18.185 "curl -s localhost:9090/api/status"
 ```
+Test playback from the web UI (Today → Test azan); it can be stopped there.
 
 ### Pi Health
 ```bash
@@ -59,27 +67,34 @@ ssh raspi@10.147.18.185 "uptime && vcgencmd get_throttled"
 ssh raspi@10.147.18.185 "free -h && df -h /"
 ```
 
-### Cron (runs on Pi)
-- `7,13,54,20 * * *` — check_device.py (5 min before each prayer)
-- `12,18,59,25 * * *` — play_azan.py (at prayer time)
-- `@reboot` + `0 0 * * *` — setup_cron.py (update prayer times)
+### Service (runs on Pi)
+```bash
+sudo systemctl restart azan
+sudo journalctl -u azan -n 50
+```
+Web UI: `http://192.168.1.5:9090`
 
 ## Gotchas
 
 ### Google Home Deep Sleep
-Google Home falls into deep sleep between check (4:07) and play (4:12). `catt scan` works (mDNS) but `catt cast` fails (needs TCP). The 5-minute gap allows deep sleep. Acceptable trade-off since check_device.py handles reboot if scan fails.
+Google Home can fall into deep sleep between the pre-azan check and the azan.
+`catt scan` works (mDNS) but `catt cast` fails (needs TCP). `player.py` retries
+the cast up to 3 times, a few seconds apart.
+
+### catt facts the code relies on
+- `catt scan` prints `ip - name - model`; `catt scan -j` prints JSON.
+- `catt cast <local file>` blocks until playback ends (exit 0), so the player
+  watches the process instead of sleeping for a fixed duration.
+- `catt status` prints `Volume: N`; used to restore the previous volume.
 
 ### SD Card Protection (Pi Zero 2 W)
 - `/tmp`, `/var/log` → tmpfs (RAM, wiped on reboot)
 - journald → volatile mode (50MB max, 1-day retention)
-- logrotate → weekly, keep 1
+- `azan.log` → rotated by the service itself (300 KB, 1 backup)
 - **Sudden power loss is safe** — no writes to SD card during normal operation
 
 ### WiFi Drops
 Pi Zero 2 W (BCM43430) drops WiFi every 30-60 seconds. ZeroTier becomes unreachable; reconnects automatically. rpi-connect is backup access.
-
-### Cron % Escaping
-Never use `%` in cron commands — it's interpreted as newline. Use Python log() timestamps instead.
 
 ### Full Paths in NetworkManager Dispatcher
 Scripts in `/etc/NetworkManager/dispatcher.d/` have limited PATH. Use full paths: `/usr/bin/date`, `/usr/bin/nmcli`, `/usr/bin/head`, etc.
@@ -97,9 +112,9 @@ For fresh Pi re-flashes, run `setup-pi.sh` which handles:
 - rpi-connect auto-restart
 - ZeroTier install + join
 - SSH key added
-- azan-automation installer launched
+- `setup.sh` run (service + web UI on port 9090)
 
 After setup: authorize ZeroTier device at my.zerotier.com
 
-## Google Home at 192.168.1.17
-Device name configured in config.yaml. IP may vary; use catt scan to find.
+## Google Home
+Chosen in the web UI (Settings → Speaker → Find). Prefer the speaker's name over its IP, which changes with DHCP.

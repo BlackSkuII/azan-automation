@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f3d33">
+<title>Azan</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f3d33'/%3E%3Cpath d='M21 22a9 9 0 1 1 0-12 7 7 0 1 0 0 12z' fill='%23e9c46a'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f4f1ea; --card: #fffdf8; --ink: #1c2b27; --muted: #66756f; --line: #e3ddd0;
+  --green: #0f3d33; --green-2: #1b5a4b; --gold: #b8892b; --gold-soft: #f5ead0;
+  --red: #a8322b; --red-soft: #f8e3e0; --ok: #23764f; --ok-soft: #dff1e6;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1715; --card: #16221f; --ink: #e8efe9; --muted: #93a39c; --line: #263632;
+    --green: #0b2b24; --green-2: #2f8f76; --gold: #e2b659; --gold-soft: #3a3018;
+    --red: #ef8079; --red-soft: #3d1f1c; --ok: #6fcf9a; --ok-soft: #17332a;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { background: var(--green); color: #f3efe2; padding: 18px 16px 0;
+  padding-top: calc(18px + env(safe-area-inset-top)); }
+.wrap { max-width: 720px; margin: 0 auto; }
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+.clock { font-variant-numeric: tabular-nums; opacity: .85; font-size: 14px; white-space: nowrap; }
+.sub { font-size: 13px; opacity: .75; margin-top: 2px; }
+nav { display: flex; gap: 4px; margin-top: 14px; overflow-x: auto; }
+nav button { flex: 1; background: none; border: 0; color: #f3efe2; opacity: .7; font: inherit;
+  font-size: 15px; padding: 10px 8px 12px; border-bottom: 3px solid transparent; cursor: pointer;
+  white-space: nowrap; }
+nav button[aria-selected="true"] { opacity: 1; border-bottom-color: #e9c46a; font-weight: 600; }
+main { padding: 16px; padding-bottom: 96px; }
+section[hidden] { display: none; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px; margin-bottom: 14px; }
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted);
+  margin: 0 0 12px; font-weight: 650; }
+.hero { background: linear-gradient(135deg, var(--green), var(--green-2)); color: #f6f2e6; border: 0; }
+.hero .label { font-size: 13px; opacity: .8; text-transform: uppercase; letter-spacing: .8px; }
+.hero .name { font-size: 34px; font-weight: 700; line-height: 1.15; margin-top: 2px; }
+.hero .when { font-size: 16px; opacity: .92; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row .grow { flex: 1; min-width: 0; }
+.pname { font-weight: 600; font-size: 17px; }
+.ptime { font-variant-numeric: tabular-nums; font-size: 19px; font-weight: 600; }
+.small { font-size: 13px; color: var(--muted); }
+.passed .pname, .passed .ptime { color: var(--muted); font-weight: 500; }
+.isnext .pname::after { content: "next"; font-size: 11px; font-weight: 650; margin-left: 8px;
+  background: var(--gold-soft); color: var(--gold); padding: 2px 7px; border-radius: 99px;
+  text-transform: uppercase; letter-spacing: .5px; vertical-align: 2px; }
+.off .pname, .off .ptime { text-decoration: line-through; color: var(--muted); font-weight: 500; }
+.note { border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: 15px;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.note .grow { flex: 1; min-width: 180px; }
+.note.warn { background: var(--gold-soft); color: var(--ink); }
+.note.bad { background: var(--red-soft); color: var(--ink); }
+.note.good { background: var(--ok-soft); color: var(--ink); }
+button, .btn { font: inherit; font-size: 15px; font-weight: 600; border-radius: 10px; padding: 10px 14px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
+  min-height: 42px; }
+button.primary { background: var(--green-2); border-color: var(--green-2); color: #fff; }
+button.danger { color: var(--red); }
+button.mini { padding: 6px 10px; min-height: 34px; font-size: 14px; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, nav button:focus-visible {
+  outline: 3px solid var(--gold); outline-offset: 2px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+label.field { display: block; margin-bottom: 14px; }
+label.field > span, .flabel { display: block; font-size: 14px; font-weight: 600; margin-bottom: 5px; }
+.hint { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.err { font-size: 13px; color: var(--red); margin-top: 4px; font-weight: 600; }
+input[type=text], input[type=number], input[type=password], input[type=url], select {
+  width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink); min-height: 44px; }
+input.bad { border-color: var(--red); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.inline { display: flex; gap: 8px; align-items: stretch; }
+.inline input { flex: 1; }
+.slider { display: flex; align-items: center; gap: 12px; }
+.slider input { flex: 1; accent-color: var(--green-2); height: 32px; }
+.slider output { width: 44px; text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; }
+.switch { position: relative; width: 50px; height: 30px; flex: none; }
+.switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.switch i { position: absolute; inset: 0; background: var(--line); border-radius: 99px; transition: background .15s; }
+.switch i::after { content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.switch input:checked + i { background: var(--green-2); }
+.switch input:checked + i::after { transform: translateX(20px); }
+.switch input:focus-visible + i { outline: 3px solid var(--gold); outline-offset: 2px; }
+.offset { width: 84px !important; text-align: center; }
+.picklist { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.picklist button { display: block; width: 100%; text-align: left; border: 0; border-radius: 0;
+  border-top: 1px solid var(--line); font-weight: 500; background: var(--bg); }
+.picklist button:first-child { border-top: 0; }
+.picklist .small { display: block; font-weight: 400; }
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card);
+  border-top: 1px solid var(--line); padding: 10px 16px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  transform: translateY(110%); transition: transform .2s; z-index: 5; }
+.savebar.show { transform: none; }
+.savebar .wrap { display: flex; gap: 10px; align-items: center; }
+.savebar .grow { flex: 1; font-size: 14px; color: var(--muted); }
+.badge { font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 99px; background: var(--ok-soft);
+  color: var(--ok); text-transform: uppercase; letter-spacing: .4px; margin-left: 6px; white-space: nowrap; }
+.file { padding: 12px 0; border-top: 1px solid var(--line); }
+.file:first-of-type { border-top: 0; }
+.file .fname { font-weight: 600; word-break: break-word; }
+.file audio { width: 100%; margin-top: 8px; height: 36px; }
+pre.log { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word; max-height: 60vh; overflow: auto; }
+.toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #1c2b27; color: #fff;
+  padding: 10px 16px; border-radius: 99px; font-size: 14px; z-index: 10; max-width: 90vw; text-align: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+.toast.bad { background: #8a2a24; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+.dot.on { background: var(--ok); } .dot.offl { background: var(--red); }
+@media (max-width: 420px) { .two { grid-template-columns: 1fr; } .hero .name { font-size: 30px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top"><h1 id="title">Azan</h1><div class="clock" id="clock"></div></div>
+    <div class="sub" id="subtitle">&nbsp;</div>
+    <nav role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="today" aria-selected="true">Today</button>
+      <button role="tab" data-tab="settings" aria-selected="false">Settings</button>
+      <button role="tab" data-tab="audio" aria-selected="false">Audio</button>
+      <button role="tab" data-tab="activity" aria-selected="false">Activity</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ───────── Today ───────── -->
+  <section id="tab-today">
+    <div id="notes"></div>
+    <div class="card hero">
+      <div class="label" id="next-label">Next azan</div>
+      <div class="name" id="next-name">—</div>
+      <div class="when" id="next-when">&nbsp;</div>
+    </div>
+    <div class="card">
+      <h2>Today's azan times</h2>
+      <div id="prayers"></div>
+      <div class="actions">
+        <span class="small grow" id="times-info" style="flex:1;align-self:center"></span>
+        <button class="mini" id="btn-refresh">Update times</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Speaker</h2>
+      <div id="speaker-line"></div>
+      <div class="actions">
+        <button id="btn-test">Test azan</button>
+        <button id="btn-test-fajr">Test Fajr azan</button>
+        <button id="btn-check">Check speaker</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── Settings ───────── -->
+  <section id="tab-settings" hidden>
+    <div class="card">
+      <h2>Speaker</h2>
+      <div class="field">
+        <span class="flabel">Google Home / Chromecast</span>
+        <div class="inline">
+          <input type="text" id="device_name" data-key="device_name" placeholder="e.g. Living Room speaker" autocomplete="off" aria-label="Speaker name or IP address">
+          <button id="btn-scan">Find</button>
+        </div>
+        <div class="hint">The speaker's name as shown in the Google Home app. A name is better than an IP address, which can change.</div>
+        <div class="err" data-err="device_name"></div>
+        <div id="scan-results"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Volume</h2>
+      <div class="field"><span class="flabel">Azan volume</span>
+        <div class="slider"><input type="range" min="0" max="100" data-key="volume" id="volume" aria-label="Azan volume"><output for="volume"></output></div></div>
+      <div class="field"><span class="flabel">Fajr azan volume</span>
+        <div class="slider"><input type="range" min="0" max="100" data-key="fajr_volume" id="fajr_volume" aria-label="Fajr azan volume"><output for="fajr_volume"></output></div></div>
+      <label class="field"><span>After the azan</span>
+        <select id="after_mode">
+          <option value="restore">Put the volume back to what it was</option>
+          <option value="fixed">Set the volume to a fixed level</option>
+        </select></label>
+      <div class="field" id="after_fixed" hidden><span class="flabel">Volume after the azan</span>
+        <div class="slider"><input type="range" min="0" max="100" id="volume_after" aria-label="Volume after the azan"><output for="volume_after"></output></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Prayers</h2>
+      <div class="small" style="margin-bottom:6px">Turn an azan off, or shift it by a few minutes (− earlier, + later).</div>
+      <div id="prayer-settings"></div>
+      <div class="err" data-err="prayers"></div>
+    </div>
+
+    <div class="card">
+      <h2>Masjid &amp; calculation</h2>
+      <label class="field"><span>Masjid name</span><input type="text" data-key="masjid_name"><div class="err" data-err="masjid_name"></div></label>
+      <div class="two">
+        <label class="field"><span>Latitude</span><input type="number" step="any" data-key="latitude" data-type="float" inputmode="decimal"><div class="err" data-err="latitude"></div></label>
+        <label class="field"><span>Longitude</span><input type="number" step="any" data-key="longitude" data-type="float" inputmode="decimal"><div class="err" data-err="longitude"></div></label>
+      </div>
+      <label class="field"><span>Calculation method</span><select data-key="method" data-type="int" id="method"></select></label>
+      <label class="field"><span>Asr school</span>
+        <select data-key="school" data-type="int">
+          <option value="1">Hanafi (later Asr)</option>
+          <option value="0">Shafi / Maliki / Hanbali</option>
+        </select></label>
+      <div class="hint">Use the same values as your masjid so the azan matches its published times.</div>
+    </div>
+
+    <div class="card">
+      <h2>Reliability</h2>
+      <label class="field"><span>Check the speaker this many minutes before each azan</span>
+        <input type="number" min="0" max="60" data-key="precheck_minutes" data-type="int" inputmode="numeric">
+        <div class="hint">0 turns the check off.</div><div class="err" data-err="precheck_minutes"></div></label>
+      <div class="row" style="border:0;padding-top:0">
+        <div class="grow"><div class="flabel" style="margin:0">Restart the Pi if the speaker can't be found</div>
+          <div class="small">Helps when the Pi's Wi-Fi has silently dropped. Only happens on a Raspberry Pi.</div></div>
+        <span class="switch"><input type="checkbox" data-key="reboot_if_missing" aria-label="Restart the Pi if the speaker can't be found"><i></i></span>
+      </div>
+      <label class="field" style="margin-top:14px"><span>Extra seconds to wait after the azan ends</span>
+        <input type="number" min="0" max="60" data-key="end_buffer_seconds" data-type="int" inputmode="numeric">
+        <div class="hint">Before the volume is put back and the TV resumes.</div><div class="err" data-err="end_buffer_seconds"></div></label>
+    </div>
+
+    <div class="card">
+      <h2>TV pause (optional)</h2>
+      <div class="small" style="margin-bottom:12px">Pause a TV through Home Assistant while the azan plays. Leave empty to skip.</div>
+      <label class="field"><span>Home Assistant address</span><input type="url" data-key="ha_url" id="ha_url" placeholder="http://192.168.1.10:8123" autocomplete="off"><div class="err" data-err="ha_url"></div></label>
+      <label class="field"><span>Access token</span><input type="password" id="ha_token" autocomplete="new-password" placeholder="">
+        <div class="hint" id="ha_token_hint"></div></label>
+      <div class="field"><span class="flabel">TV entity</span>
+        <div class="inline"><input type="text" data-key="tv_entity_id" id="tv_entity_id" placeholder="media_player.living_room_tv" autocomplete="off" aria-label="TV entity"><button id="btn-ha">Find</button></div>
+        <div id="ha-results"></div></div>
+    </div>
+  </section>
+
+  <!-- ───────── Audio ───────── -->
+  <section id="tab-audio" hidden>
+    <div class="card">
+      <h2>Azan recordings</h2>
+      <div id="files"><div class="small">Loading…</div></div>
+    </div>
+    <div class="card">
+      <h2>Add a recording</h2>
+      <input type="file" id="upload" accept=".mp3,audio/mpeg" aria-label="Choose an MP3 file">
+      <div class="actions"><button class="primary" id="btn-upload" disabled>Upload MP3</button></div>
+      <div class="hint">MP3 only, up to 25 MB. Its length is detected automatically.</div>
+    </div>
+  </section>
+
+  <!-- ───────── Activity ───────── -->
+  <section id="tab-activity" hidden>
+    <div class="card">
+      <h2>Recent activity</h2>
+      <pre class="log" id="log" tabindex="0">Loading…</pre>
+    </div>
+    <div class="card">
+      <h2>System</h2>
+      <div class="small" id="sysinfo"></div>
+      <div class="actions"><button class="danger" id="btn-reboot">Restart the Pi</button></div>
+    </div>
+  </section>
+</main>
+
+<div class="savebar" id="savebar"><div class="wrap">
+  <div class="grow" id="save-msg">You have unsaved changes</div>
+  <button id="btn-discard">Discard</button>
+  <button class="primary" id="btn-save">Save</button>
+</div></div>
+<div id="toast-holder" aria-live="polite"></div>
+
+<script>
+"use strict";
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+const PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+const METHODS = [[2,"ISNA — Islamic Society of North America"],[3,"Muslim World League"],
+  [1,"University of Islamic Sciences, Karachi"],[4,"Umm Al-Qura University, Makkah"],
+  [5,"Egyptian General Authority of Survey"],[15,"Moonsighting Committee Worldwide"],
+  [0,"Shia Ithna-Ashari (Jafari)"],[7,"Institute of Geophysics, Tehran"],[8,"Gulf Region"],
+  [9,"Kuwait"],[10,"Qatar"],[11,"Singapore (MUIS)"],[12,"France (UOIF)"],[13,"Turkey (Diyanet)"],
+  [14,"Russia"],[16,"Dubai"],[17,"Malaysia (JAKIM)"],[18,"Tunisia"],[19,"Algeria"],
+  [20,"Indonesia (KEMENAG)"],[21,"Morocco"],[22,"Lisbon"],[23,"Jordan"]];
+
+/* Build an element: h("div", {class:"x", onclick:fn}, child, "text", …) */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v == null) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false)
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+
+function toast(message, bad) {
+  const holder = $("#toast-holder");
+  holder.replaceChildren(h("div", {class: "toast" + (bad ? " bad" : "")}, message));
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => holder.replaceChildren(), bad ? 6000 : 3000);
+}
+
+async function api(method, path, body) {
+  const opts = {method, headers: {}};
+  if (body instanceof Blob) { opts.body = body; opts.headers["Content-Type"] = "application/octet-stream"; }
+  else if (method !== "GET" && method !== "DELETE") {
+    opts.body = JSON.stringify(body || {}); opts.headers["Content-Type"] = "application/json"; }
+  let resp;
+  try { resp = await fetch(path, opts); }
+  catch (e) { throw new Error("Can't reach the Pi — is it on and on this network?"); }
+  let data = null;
+  try { data = await resp.json(); } catch (e) {}
+  if (!resp.ok) {
+    const err = new Error((data && data.error) || ("Request failed (" + resp.status + ")"));
+    err.fields = data && data.fields; throw err;
+  }
+  return data;
+}
+
+/* Run an action from a button: disable it, show progress, report errors. */
+async function busy(button, label, fn) {
+  const old = button.textContent;
+  button.disabled = true; button.textContent = label;
+  try { return await fn(); }
+  catch (e) { toast(e.message, true); }
+  finally { button.disabled = false; button.textContent = old; }
+}
+
+/* ───────── Tabs ───────── */
+let currentTab = "today";
+function showTab(name) {
+  currentTab = name;
+  $$("nav button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $$("main > section").forEach(s => s.hidden = s.id !== "tab-" + name);
+  if (name === "audio") loadAudio();
+  if (name === "activity") loadLog();
+  if (name === "settings" && !dirty) loadSettings();
+  updateSaveBar();
+  history.replaceState(null, "", "#" + name);
+}
+$$("nav button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+/* ───────── Today ───────── */
+let status = null, statusAt = 0, offline = false;
+
+function fmtCountdown(seconds) {
+  seconds = Math.max(0, Math.round(seconds));
+  const hrs = Math.floor(seconds / 3600), min = Math.floor((seconds % 3600) / 60), sec = seconds % 60;
+  if (hrs) return hrs + " h " + min + " min";
+  if (min >= 5) return min + " min";
+  if (min) return min + " min " + sec + " s";
+  return sec + " s";
+}
+function fmt12(t) {
+  if (!t) return "—";
+  let [hh, mm] = t.split(":").map(Number);
+  const ap = hh >= 12 ? "PM" : "AM"; hh = hh % 12 || 12;
+  return hh + ":" + String(mm).padStart(2, "0") + " " + ap;
+}
+function fmtDuration(s) {
+  if (s == null) return "length unknown";
+  s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function renderCountdown() {
+  if (!status) return;
+  const elapsed = (Date.now() - statusAt) / 1000;
+  const n = status.next;
+  if (n) {
+    const left = n.seconds - elapsed;
+    $("#next-name").textContent = n.name;
+    const at = new Date(n.at);
+    const hhmm = String(at.getHours()).padStart(2,"0") + ":" + String(at.getMinutes()).padStart(2,"0");
+    const p = status.prayers.find(x => x.name === n.name);
+    const shown = fmt12(p && p.plays_at ? p.plays_at : hhmm);
+    $("#next-when").textContent = left <= 0 ? "now" :
+      "in " + fmtCountdown(left) + " · " + (n.tomorrow ? "tomorrow, about " : "") + shown;
+  }
+  const now = new Date(status.now.replace(" ", "T")); now.setSeconds(now.getSeconds() + elapsed);
+  $("#clock").textContent = now.toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
+}
+
+function note(kind, text, ...buttons) {
+  return h("div", {class: "note " + kind, role: kind === "bad" ? "alert" : null},
+    h("div", {class: "grow"}, text), buttons);
+}
+
+function renderStatus() {
+  const s = status;
+  $("#title").textContent = s.masjid_name || "Azan";
+  document.title = "Azan" + (s.next ? " · " + s.next.name : "");
+  const d = new Date(s.date + "T12:00:00");
+  $("#subtitle").textContent = d.toLocaleDateString([], {weekday: "long", month: "long", day: "numeric"}) +
+    (s.timezone ? " · " + s.timezone.replace(/_/g, " ") : "");
+
+  const notes = [];
+  if (offline) notes.push(note("bad", "Can't reach the Pi right now. Showing the last known information."));
+  const playing = s.player.playing;
+  if (playing) notes.push(note("good", "Playing now: " + playing.label + " (" + playing.file + ", volume " + playing.volume + ")",
+    h("button", {class: "mini danger", onclick: stopPlayback}, "Stop")));
+  if (!s.device_name) notes.push(note("warn", "No speaker chosen yet, so the azan can't play.",
+    h("button", {class: "mini", onclick: () => showTab("settings")}, "Choose speaker")));
+  const haveTimes = s.prayers.some(p => p.time);
+  if (!haveTimes) notes.push(note("bad", "Prayer times couldn't be loaded" + (s.fetch_error ? " (" + s.fetch_error + ")" : "") +
+    ". The azan won't play until they load; it keeps retrying."));
+  else if (s.times_stale) notes.push(note("warn", "Couldn't update today's times, so the times from " + s.times_date +
+    " are being used (usually within a minute or two). Still retrying."));
+  if (s.timezone_mismatch) notes.push(note("warn", "The Pi's clock is set to a different timezone than the masjid (" +
+    s.timezone + "). The azan still plays at the masjid's local time."));
+  const last = s.player.last;
+  if (last && !last.ok && last.message !== "Stopped" && !playing)
+    notes.push(note("bad", last.label + " at " + last.at.slice(11, 16) + " did not play: " + last.message));
+  if (s.device && !s.device.online && s.device_name)
+    notes.push(note("warn", "The speaker wasn't found when last checked (" + s.device.at.slice(11, 16) + ")."));
+  $("#notes").replaceChildren(...notes);
+
+  if (!s.next) {
+    $("#next-name").textContent = haveTimes ? "All azans are off" : "—";
+    $("#next-when").textContent = "\u00a0";
+  }
+  const rows = s.prayers.map(p => {
+    const cls = ["row"];
+    if (!p.enabled) cls.push("off"); else if (p.passed) cls.push("passed");
+    if (s.next && !s.next.tomorrow && s.next.name === p.name) cls.push("isnext");
+    const shifted = p.enabled && p.offset && p.time;
+    return h("div", {class: cls.join(" ")},
+      h("div", {class: "grow"},
+        h("div", {class: "pname"}, p.name),
+        !p.enabled ? h("div", {class: "small"}, "Azan off") :
+        shifted ? h("div", {class: "small"}, "Plays at " + fmt12(p.plays_at) + " (" + (p.offset > 0 ? "+" : "−") + Math.abs(p.offset) + " min)") : null),
+      h("div", {class: "ptime"}, fmt12(p.time)),
+      h("span", {class: "switch"},
+        h("input", {type: "checkbox", checked: p.enabled, "aria-label": p.name + " azan on",
+          onchange: e => togglePrayer(p.name, e.target.checked)}), h("i")));
+  });
+  $("#prayers").replaceChildren(...rows);
+  $("#times-info").textContent = s.fetched_at ? "From Aladhan · updated " + s.fetched_at.slice(5, 16) : "";
+
+  const dev = s.device;
+  $("#speaker-line").replaceChildren(...[
+    h("div", {class: "pname"}, s.device_name || "Not chosen"),
+    h("div", {class: "small"}, !s.device_name ? "Pick your speaker in Settings." :
+      dev ? [h("span", {class: "dot " + (dev.online ? "on" : "offl")}), (dev.online ? "Online" : "Not found") + " · checked " + dev.at.slice(11, 16)] :
+      "Not checked yet — it is checked before each azan."),
+    s.tv_control ? h("div", {class: "small"}, "TV pause is on") : null].filter(Boolean));
+  ["#btn-test", "#btn-test-fajr", "#btn-check"].forEach(id => $(id).disabled = !s.device_name || ($(id).dataset.busy === "1"));
+  $("#sysinfo").textContent = "Azan Automation " + s.version + " · settings are stored on this device.";
+  renderCountdown();
+}
+
+async function loadStatus() {
+  try {
+    status = await api("GET", "/api/status"); statusAt = Date.now(); offline = false;
+  } catch (e) { offline = true; }
+  if (status) renderStatus();
+  else $("#notes").replaceChildren(note("bad", "Can't reach the Pi — is it on and on this network?"));
+}
+
+async function togglePrayer(name, enabled) {
+  try {
+    await api("POST", "/api/settings", {prayers: {[name]: {enabled}}});
+    toast(name + " azan turned " + (enabled ? "on" : "off"));
+    if (saved) saved.prayers[name].enabled = enabled;
+    if (!dirty && saved) fillSettings(saved);
+  } catch (e) { toast(e.message, true); }
+  loadStatus();
+}
+
+async function testPlay(button, body) {
+  button.dataset.busy = "1";
+  await busy(button, "Starting…", async () => {
+    await api("POST", "/api/play", body);
+    toast("Sent to the speaker — it starts in a few seconds");
+    setTimeout(loadStatus, 800);
+  });
+  button.dataset.busy = "";
+}
+async function stopPlayback() {
+  try { await api("POST", "/api/stop"); toast("Stopping…"); } catch (e) { toast(e.message, true); }
+  setTimeout(loadStatus, 1500);
+}
+$("#btn-test").addEventListener("click", e => testPlay(e.currentTarget, {fajr: false}));
+$("#btn-test-fajr").addEventListener("click", e => testPlay(e.currentTarget, {fajr: true}));
+$("#btn-check").addEventListener("click", e => { const b = e.currentTarget; b.dataset.busy = "1";
+  busy(b, "Checking…", async () => {
+    const r = await api("POST", "/api/check");
+    toast(r.device && r.device.online ? "Speaker is online" : "Speaker not found", !(r.device && r.device.online));
+  }).then(() => { b.dataset.busy = ""; loadStatus(); }); });
+$("#btn-refresh").addEventListener("click", e => busy(e.currentTarget, "Updating…", async () => {
+  await api("POST", "/api/refresh"); toast("Times updated"); }).then(loadStatus));
+
+/* ───────── Settings ───────── */
+let saved = null, dirty = false;
+
+function buildSettingsForm() {
+  $("#method").replaceChildren(...METHODS.map(([v, t]) => h("option", {value: v}, t)));
+  $("#prayer-settings").replaceChildren(...PRAYERS.map(name =>
+    h("div", {class: "row"},
+      h("div", {class: "grow pname"}, name),
+      h("input", {type: "number", class: "offset", min: -60, max: 60, step: 1, inputmode: "numeric",
+        "data-offset": name, "aria-label": name + " shift in minutes"}),
+      h("span", {class: "small"}, "min"),
+      h("span", {class: "switch"}, h("input", {type: "checkbox", "data-enabled": name, "aria-label": name + " azan on"}), h("i")))));
+  $("#tab-settings").addEventListener("input", onFormInput);
+  $("#tab-settings").addEventListener("change", onFormInput);
+}
+function syncOutputs() {
+  $$("#tab-settings output").forEach(o => o.textContent = $("#" + o.htmlFor).value);
+  $("#after_fixed").hidden = $("#after_mode").value !== "fixed";
+}
+function onFormInput() { syncOutputs(); dirty = JSON.stringify(readForm()) !== JSON.stringify(readFormBaseline); updateSaveBar(); }
+let readFormBaseline = null;
+
+function fillSettings(s) {
+  $$("#tab-settings [data-key]").forEach(el => {
+    const v = s[el.dataset.key];
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v == null ? "" : v;
+  });
+  if (!METHODS.some(([v]) => v === s.method)) { $("#method").append(h("option", {value: s.method}, "Method " + s.method)); $("#method").value = s.method; }
+  $("#after_mode").value = s.volume_after == null ? "restore" : "fixed";
+  $("#volume_after").value = s.volume_after == null ? s.volume : s.volume_after;
+  $("#ha_token").value = "";
+  $("#ha_token_hint").textContent = s.ha_token_set ? "A token is saved. Leave empty to keep it, or type a new one." :
+    "A long-lived access token from your Home Assistant profile.";
+  PRAYERS.forEach(name => {
+    $(`[data-offset="${name}"]`).value = s.prayers[name].offset;
+    $(`[data-enabled="${name}"]`).checked = s.prayers[name].enabled;
+  });
+  $$("#tab-settings .err").forEach(e => e.textContent = "");
+  $$("#tab-settings input.bad").forEach(e => e.classList.remove("bad"));
+  syncOutputs();
+  readFormBaseline = readForm(); dirty = false; updateSaveBar();
+}
+
+function readForm() {
+  const out = {};
+  $$("#tab-settings [data-key]").forEach(el => {
+    const type = el.dataset.type || (el.type === "range" ? "int" : "");
+    if (el.type === "checkbox") out[el.dataset.key] = el.checked;
+    else if (type === "int" || type === "float") out[el.dataset.key] = el.value.trim() === "" ? "" : Number(el.value);
+    else out[el.dataset.key] = el.value.trim();
+  });
+  out.volume_after = $("#after_mode").value === "fixed" ? Number($("#volume_after").value) : null;
+  out.prayers = {};
+  PRAYERS.forEach(name => {
+    const raw = $(`[data-offset="${name}"]`).value.trim();
+    out.prayers[name] = {enabled: $(`[data-enabled="${name}"]`).checked, offset: raw === "" ? 0 : Number(raw)};
+  });
+  const token = $("#ha_token").value.trim();
+  if (token) out.ha_token = token;
+  return out;
+}
+
+function updateSaveBar() { $("#savebar").classList.toggle("show", dirty && currentTab === "settings"); }
+
+async function loadSettings() {
+  try { saved = await api("GET", "/api/settings"); fillSettings(saved); }
+  catch (e) { toast(e.message, true); }
+}
+
+async function saveSettings() {
+  $$("#tab-settings .err").forEach(e => e.textContent = "");
+  $$("#tab-settings input.bad").forEach(e => e.classList.remove("bad"));
+  await busy($("#btn-save"), "Saving…", async () => {
+    try {
+      saved = await api("POST", "/api/settings", readForm());
+      fillSettings(saved); toast("Saved"); loadStatus();
+    } catch (e) {
+      if (!e.fields) throw e;
+      let first = null;
+      for (const [key, msg] of Object.entries(e.fields)) {
+        const slot = $(`[data-err="${key}"]`); if (slot) slot.textContent = msg;
+        const input = $(`#tab-settings [data-key="${key}"]`);
+        if (input) { input.classList.add("bad"); first = first || input; }
+      }
+      if (first) first.focus();
+      toast("Please fix the highlighted settings", true);
+    }
+  });
+}
+$("#btn-save").addEventListener("click", saveSettings);
+$("#btn-discard").addEventListener("click", () => saved && fillSettings(saved));
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+
+function pickList(holder, items, onPick, emptyText) {
+  if (!items.length) { holder.replaceChildren(h("div", {class: "hint"}, emptyText)); return; }
+  holder.replaceChildren(h("div", {class: "picklist"}, items.map(it =>
+    h("button", {type: "button", onclick: () => { onPick(it); holder.replaceChildren(); onFormInput(); }},
+      it.title, h("span", {class: "small"}, it.detail)))));
+}
+$("#btn-scan").addEventListener("click", e => busy(e.currentTarget, "Searching…", async () => {
+  $("#scan-results").replaceChildren(h("div", {class: "hint"}, "Searching the network — this takes up to 30 seconds…"));
+  try {
+    const r = await api("GET", "/api/devices");
+    pickList($("#scan-results"), r.devices.map(d => ({title: d.name, detail: [d.model, d.ip].filter(Boolean).join(" · "), value: d.name})),
+      it => $("#device_name").value = it.value,
+      "No speakers found. Check that the speaker is on and on the same Wi-Fi as the Pi, then try again.");
+  } catch (err) { $("#scan-results").replaceChildren(); throw err; }
+}));
+$("#btn-ha").addEventListener("click", e => busy(e.currentTarget, "Searching…", async () => {
+  const r = await api("POST", "/api/ha/players", {ha_url: $("#ha_url").value.trim(), ha_token: $("#ha_token").value.trim()});
+  pickList($("#ha-results"), r.players.map(p => ({title: p.name, detail: p.id, value: p.id})),
+    it => $("#tv_entity_id").value = it.value, "Home Assistant has no media players.");
+}));
+
+/* ───────── Audio ───────── */
+async function loadAudio() {
+  try { renderAudio(await api("GET", "/api/audio")); }
+  catch (e) { $("#files").replaceChildren(h("div", {class: "small"}, e.message)); }
+}
+function renderAudio(data) {
+  if (!data.files.length) { $("#files").replaceChildren(h("div", {class: "small"}, "No recordings yet. Upload an MP3 below.")); return; }
+  $("#files").replaceChildren(...data.files.map(f => {
+    const isAzan = f.name === data.azan_file, isFajr = f.name === data.fajr_azan_file;
+    return h("div", {class: "file"},
+      h("div", {class: "fname"}, f.name, isAzan ? h("span", {class: "badge"}, "Azan") : null, isFajr ? h("span", {class: "badge"}, "Fajr") : null),
+      h("div", {class: "small"}, fmtDuration(f.duration) + " · " + (f.size / 1048576).toFixed(1) + " MB"),
+      h("audio", {controls: true, preload: "none", src: "/audio/" + encodeURIComponent(f.name), "aria-label": "Preview " + f.name}),
+      h("div", {class: "actions"},
+        isAzan ? null : h("button", {class: "mini", onclick: e => useFile(e.currentTarget, "azan_file", f.name)}, "Use for azan"),
+        isFajr ? null : h("button", {class: "mini", onclick: e => useFile(e.currentTarget, "fajr_azan_file", f.name)}, "Use for Fajr"),
+        h("button", {class: "mini", onclick: e => testPlay(e.currentTarget, {file: f.name})}, "Play on speaker"),
+        (isAzan || isFajr) ? null : h("button", {class: "mini danger", onclick: e => deleteFile(e.currentTarget, f.name)}, "Delete")));
+  }));
+}
+function useFile(button, key, name) {
+  return busy(button, "Saving…", async () => {
+    saved = await api("POST", "/api/settings", {[key]: name});
+    if (!dirty) fillSettings(saved);
+    toast(name + " will be used for " + (key === "azan_file" ? "the azan" : "the Fajr azan"));
+    await loadAudio();
+  });
+}
+function deleteFile(button, name) {
+  if (!confirm("Delete " + name + " from the Pi? This can't be undone.")) return;
+  return busy(button, "Deleting…", async () => {
+    renderAudio(await api("DELETE", "/api/audio?name=" + encodeURIComponent(name))); toast("Deleted " + name);
+  });
+}
+$("#upload").addEventListener("change", () => $("#btn-upload").disabled = !$("#upload").files.length);
+$("#btn-upload").addEventListener("click", e => busy(e.currentTarget, "Uploading…", async () => {
+  const file = $("#upload").files[0];
+  if (!file) return;
+  if (file.size > 25 * 1048576) throw new Error("File is too large (25 MB maximum)");
+  renderAudio(await api("POST", "/api/audio?name=" + encodeURIComponent(file.name), file));
+  $("#upload").value = ""; toast("Uploaded " + file.name);
+}).then(() => $("#btn-upload").disabled = !$("#upload").files.length));
+
+/* ───────── Activity ───────── */
+async function loadLog() {
+  try {
+    const r = await api("GET", "/api/log?lines=300");
+    const el = $("#log"), atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30, first = el.dataset.loaded !== "1";
+    el.textContent = r.lines.length ? r.lines.join("\n") : "Nothing has happened yet.";
+    el.dataset.loaded = "1";
+    if (first || atBottom) el.scrollTop = el.scrollHeight;
+  } catch (e) { $("#log").textContent = e.message; }
+}
+$("#btn-reboot").addEventListener("click", e => {
+  if (!confirm("Restart the Raspberry Pi now? It will be back in about two minutes.")) return;
+  busy(e.currentTarget, "Restarting…", async () => { await api("POST", "/api/reboot"); toast("The Pi is restarting"); });
+});
+
+/* ───────── Start ───────── */
+buildSettingsForm();
+loadSettings();
+loadStatus();
+setInterval(() => { if (!document.hidden) { loadStatus(); if (currentTab === "activity") loadLog(); } }, 5000);
+setInterval(renderCountdown, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loadStatus(); });
+const startTab = location.hash.slice(1);
+if (["settings", "audio", "activity"].includes(startTab)) showTab(startTab);
+</script>
+</body>
+</html>

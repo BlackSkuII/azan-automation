@@ -1,14 +1,28 @@
 # Azan Automation
 
-Automated prayer time (Azan) player for Google Home / Chromecast devices.
+Plays the Azan on a Google Home / Chromecast speaker at each prayer time, and
+gives you a web page to control it from any phone or computer on your network:
 
-Fetches daily prayer times from the [Aladhan API](https://aladhan.com/prayer-times-api) using the **same query as the masjid's website** (same coordinates, ISNA method, Hanafi asr), casts Azan audio to your Google Home at each prayer time, and optionally pauses/resumes your TV via Home Assistant.
+```
+http://<your-pi's-ip>:9090
+```
 
-**Works on:** Raspberry Pi (Zero 2 W, 3, 4, 5), Linux, macOS
+**Runs on:** Raspberry Pi (Zero 2 W, 3, 4, 5), Linux, macOS (for testing)
 
-## Quick Start
+## What you can do from the web page
 
-No prerequisites — just run:
+| Tab | What's there |
+|-----|--------------|
+| **Today** | Today's azan times, countdown to the next one, on/off switch per prayer, test buttons, speaker check |
+| **Settings** | Speaker (with a *Find* button), volumes, per-prayer time shift, masjid location and calculation method, TV pause |
+| **Audio** | Listen to, upload, choose and delete azan recordings |
+| **Activity** | What happened and when (played, failed, speaker not found…) |
+
+All settings are stored **on the device** in `data/settings.json`. That folder
+is ignored by Git, so `git pull` never touches your settings and nothing
+personal ends up on GitHub.
+
+## Install
 
 ```bash
 git clone https://github.com/BlackSkuII/azan-automation.git
@@ -16,144 +30,118 @@ cd azan-automation
 ./setup.sh
 ```
 
-`setup.sh` installs Python 3 if missing, then launches the interactive installer.
+`setup.sh` installs the Python packages, makes the service start on boot, and
+prints the address of the web page. Open it, press **Find** under
+*Settings → Speaker*, choose your speaker, and save. That's all.
 
-The installer will guide you through:
+Run `./setup.sh` again after every `git pull`; it is safe to repeat.
 
-1. **System deps** — installs `python3-venv` etc. on Pi/Linux
-2. **Virtual env** — creates `venv/` with all Python packages
-3. **Masjid location** — coordinates, calculation method, asr school (pre-filled with the masjid's values)
-4. **Device discovery** — scans for Google Home devices on your network
-5. **Home Assistant** *(optional)* — pauses/resumes TV during Azan
-6. **Audio files** — paths to your Azan MP3 files
-7. **Cron setup** — schedules everything automatically
+### Upgrading from version 1 (cron + `config.yaml`)
 
-### Add Your Audio Files
-
-Place your Azan MP3s in the `audio/` directory:
-
-```
-audio/azan.mp3        # Regular azan
-audio/fajr_azan.mp3   # Fajr azan (different recitation)
-```
-
-Set the duration (in seconds) in `config.yaml` to match your audio files (+ a few seconds buffer).
-
-## How It Works
-
-```
-Daily @ Midnight + @Reboot
-        │
-        ▼
-  setup_cron.py                ← Fetches today's prayer times from API
-        │
-        ▼
-  Cron Updated                 ← 10 jobs: 5 device checks + 5 azan plays
-        │
-   ┌────┴──────────────────────────────────────┐
-   │                                            │
-   ▼  (5 min before prayer)                    ▼  (at prayer time)
-  check_device.py            play_azan.py
-  Scans for Google Home      Pauses TV → Plays Azan → Resumes TV
-  Reboots Pi if not found
-```
-
-## Configuration
-
-Shared settings are stored in the tracked `config.yaml`, which you can edit on GitHub and pull onto your Pi. The optional `config.local.yaml` is ignored by Git and overrides shared settings. Keep secrets such as `ha_token` only in `config.local.yaml` (the installer saves the token there). Never commit tokens to GitHub.
-
-To update an existing Pi for the first time, back up its old ignored config **outside the repository** before pulling, because it would otherwise conflict with the new tracked file:
+Keep your old settings by putting `config.yaml` aside while you pull:
 
 ```bash
-cp config.yaml ~/azan-config-backup.yaml
-rm config.yaml
+cd ~/azan-automation
+mv config.yaml /tmp/config.yaml
+git checkout -- config.yaml
 git pull
+mv /tmp/config.yaml config.yaml
+./setup.sh
 ```
 
-If the old config contains a Home Assistant token, copy it into `config.local.yaml` on the Pi (for example, `ha_token: "your-token"`); also copy any other settings you want to override locally. Treat the backup as sensitive. After editing `config.yaml` on GitHub and pulling, run `venv/bin/python setup_cron.py` to apply changes to the schedule and the volume stored in existing cron jobs immediately. Otherwise, cron refreshes at midnight or reboot. The installer can also modify the tracked config locally, so commit or back up local changes before pulling.
+On first start the service imports `config.yaml` (and the Home Assistant token
+from `config.local.yaml`) into `data/settings.json`. After that the old files
+are not read again and can be deleted. `setup.sh` also removes the old cron
+jobs. If you skip this, just enter your speaker and volumes on the web page.
 
-Settings include:
+## How it works
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `masjid_name` | Allston Brighton Islamic Center | Name used in logs |
-| `latitude` | 42.3601 | Masjid latitude (fixed — not device GPS) |
-| `longitude` | -71.0589 | Masjid longitude |
-| `method` | 2 | Prayer calculation method (2 = ISNA) |
-| `school` | 1 | 0=Shafi, 1=Hanafi (1 = Hanafi asr) |
-| `device_name` | — | Google Home device name |
-| `volume` | 100 | Volume during non-Fajr Azans (0-100); reset to 100 afterward |
-| `fajr_volume` | Same as `volume` | Volume during Fajr Azan (0-100); reset to 100 afterward |
-| `azan_file` | audio/azan.mp3 | Path to regular azan audio |
-| `fajr_azan_file` | audio/fajr_azan.mp3 | Path to Fajr azan audio |
-| `scan_before_minutes` | 5 | Minutes before prayer to check device |
-| `ha_url` | — | Home Assistant URL (empty = skip TV control) |
-| `ha_token` | — | HA long-lived access token; store in `config.local.yaml` only |
-| `tv_entity_id` | — | HA media_player entity for TV |
+One small service (`python -m azan`) does everything:
 
-### Prayer Times API
+```
+            ┌──────────────────────── azan service ───────────────────────┐
+ browser ──▶│ web page :9090 ──▶ data/settings.json                       │
+            │                                                             │
+            │ scheduler ── once a day ──▶ Aladhan API (today's times)     │
+            │     │                                                       │
+            │     ├─ a few minutes before each azan ──▶ is the speaker    │
+            │     │                                     on the network?   │
+            │     └─ at azan time ──▶ pause TV → set volume → cast azan   │
+            │                         → put volume back → resume TV      │
+            └─────────────────────────────────────────────────────────────┘
+```
 
-Prayer times come from the Aladhan API with the exact request the masjid's website/app uses:
+Things it takes care of:
+
+- **No network at midnight** — it keeps retrying, and meanwhile uses the last
+  times it had (they move by a minute or two per day). The page tells you.
+- **Speaker asleep** — the cast is retried up to three times.
+- **Volume** — after the azan the speaker goes back to the volume it had
+  before (or to a fixed level, if you prefer).
+- **Recording length** — detected from the MP3; there is nothing to type in.
+- **Restarts** — an azan is never replayed if the Pi or the service restarts.
+- **Timezone** — the azan follows the masjid's local time even if the Pi's
+  clock is set to another zone.
+- **Speaker missing** — optionally restarts the Pi, which fixes a silently
+  dropped Wi-Fi connection (at most once per 15 minutes of uptime).
+
+### Prayer times
+
+Times come from the [Aladhan API](https://aladhan.com/prayer-times-api) using
+the same query as the masjid's website, so the azan matches its published
+times:
 
 ```
 https://api.aladhan.com/v1/timings/<DD-MM-YYYY>
     ?latitude=42.3601&longitude=-71.0589&method=2&school=1
 ```
 
-- **Fixed masjid coordinates** — device GPS is never used, so every screen and speaker shows identical times.
-- **`method=2`** — Islamic Society of North America (ISNA), the masjid's calculation method.
-- **`school=1`** — Hanafi asr, the masjid's school.
+`method=2` is ISNA and `school=1` is Hanafi Asr. Change them under
+*Settings → Masjid & calculation*. These are **adhan** times; use the
+per-prayer shift if you want it a few minutes earlier or later.
 
-If the masjid changes any of these, update `latitude`, `longitude`, `method`, or `school` in `config.yaml` (the defaults live in `azan/prayer_times.py` and `azan/config.py`). The API returns **adhan** times; iqamah offsets are handled by the masjid's app, not here.
+## Security
 
-Existing `config.yaml` files from the old city-based version (with `city`/`country` and `method: 1`) are upgraded automatically: they switch to the masjid's fixed coordinates and ISNA/Hanafi settings on load. Delete `city`/`country` from the file when convenient.
+The web page has **no password**. Anyone on your home network can change the
+settings or play a test azan, so do not forward port 9090 on your router or
+expose it to the internet. The Home Assistant token is stored in a file only
+your user can read and is never sent back to the browser.
 
-### Prayer Calculation Methods
-
-| ID | Method |
-|----|--------|
-| 1 | University of Islamic Sciences, Karachi |
-| 2 | Islamic Society of North America (ISNA) — **masjid default** |
-| 3 | Muslim World League |
-| 4 | Umm Al-Qura University, Makkah |
-| 5 | Egyptian General Authority of Survey |
-| 7 | Institute of Geophysics, University of Tehran |
-
-## Manual Commands
+## Useful commands
 
 ```bash
-# Reconfigure
-python3 install.py
+sudo systemctl status azan        # is it running?
+sudo systemctl restart azan       # restart it
+sudo journalctl -u azan -n 50     # service output
+tail -50 azan.log                 # the same log the Activity tab shows
 
-# Fetch today's prayer times and update cron
-python3 setup_cron.py
-
-# Preview cron without writing
-python3 setup_cron.py --dry-run
-
-# Play azan manually (the supplied volume overrides config for that run)
-venv/bin/python play_azan.py 100
-venv/bin/python play_azan.py 100 fajr
-
-# Check device connectivity
-venv/bin/python check_device.py
-
-# Run tests (no network needed)
-venv/bin/python -m unittest discover -s tests
+venv/bin/python -m azan --port 9090             # run by hand (stop the service first)
+venv/bin/python -m unittest discover -s tests -t .   # tests (no network or speaker needed)
 ```
 
-## Requirements
+To use another port, run `AZAN_PORT=8080 ./setup.sh`.
 
-- **None** — `setup.sh` installs everything (Python 3, venv, pip packages)
-- A Google Home / Chromecast device on the same network
-- *(Optional)* Home Assistant running locally for TV control
+## Project layout
 
-## Platform Notes
-
-- **Raspberry Pi Zero 2 W**: Fully supported. Uses `--no-cache-dir` for pip to save disk space. If the Google Home is unreachable before prayer time, the Pi reboots automatically.
-- **Raspberry Pi 3/4/5**: Recommended. Best performance.
-- **Linux desktop/server**: Works. Uses cron for scheduling.
-- **macOS**: Works for development/testing. Reboot on device failure is skipped.
+```
+azan/
+├── __main__.py      start the service (web server + scheduler)
+├── web.py           JSON API and page serving
+├── static/index.html   the web page
+├── scheduler.py     fetches times, fires the speaker check and the azan
+├── player.py        pause TV → volume → cast → restore
+├── cast.py          wrapper around the catt command
+├── prayer_times.py  Aladhan API
+├── settings.py      data/settings.json: defaults, validation, v1 import
+├── audio.py         files in audio/, upload, MP3 length
+├── tv_control.py    Home Assistant pause/resume
+└── system.py        Pi detection, restart, IP address
+audio/               azan recordings (MP3)
+data/                settings and state — on the device only, not in Git
+setup.sh             install / update
+setup-pi.sh          one-shot preparation of a freshly flashed Pi
+wifi-logger.sh       optional Wi-Fi event logger (NetworkManager dispatcher)
+```
 
 ## License
 
