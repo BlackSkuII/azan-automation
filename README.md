@@ -18,6 +18,16 @@ http://<your-pi's-ip>:9090
 | **Audio** | Listen to, upload, choose and delete azan recordings |
 | **Activity** | What happened and when (played, failed, speaker not found…) |
 
+### Add it to your phone's home screen
+
+The page can be saved as an app icon and then opens full screen, without the
+browser bars.
+
+- **iPhone / iPad:** open the page in Safari → **Share** → **Add to Home Screen**.
+- **Android:** open it in Chrome → menu (⋮) → **Add to Home screen**.
+
+It still talks to the Pi over your Wi-Fi, so it only works at home.
+
 All settings are stored **on the device** in `data/settings.json`. That folder
 is ignored by Git, so `git pull` never touches your settings and nothing
 personal ends up on GitHub.

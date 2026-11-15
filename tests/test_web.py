@@ -82,6 +82,20 @@ class WebTests(unittest.TestCase):
         self.assertEqual(len(data["prayers"]), 5)
         self.assertIn("version", data)
 
+    def test_home_screen_files_are_served(self):
+        status, page = self.call("GET", "/")
+        self.assertIn(b'rel="manifest" href="/manifest.webmanifest"', page)
+        self.assertIn(b'rel="apple-touch-icon" href="/apple-touch-icon.png"', page)
+        status, raw = self.call("GET", "/manifest.webmanifest")
+        self.assertEqual(status, 200)
+        manifest = json.loads(raw)
+        self.assertEqual(manifest["display"], "standalone")
+        for icon in manifest["icons"] + [{"src": "/apple-touch-icon.png"},
+                                         {"src": "/apple-touch-icon-precomposed.png"}]:
+            status, png = self.call("GET", icon["src"])
+            self.assertEqual(status, 200, icon["src"])
+            self.assertTrue(png.startswith(b"\x89PNG"), icon["src"])
+
     def test_settings_round_trip_hides_the_token(self):
         status, data = self.call("POST", "/api/settings",
                                  {"device_name": "Den", "volume": 44, "ha_token": "s3cret"})

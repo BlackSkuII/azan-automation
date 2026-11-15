@@ -172,6 +172,16 @@ ROUTES = {
 }
 
 
+# Home-screen ("add to home screen") files served next to the page.
+STATIC_FILES = {
+    "/manifest.webmanifest": "application/manifest+json",
+    "/apple-touch-icon.png": "image/png",
+    "/apple-touch-icon-precomposed.png": "image/png",
+    "/icon-192.png": "image/png",
+    "/icon-512.png": "image/png",
+}
+
+
 def make_handler(app):
     class Handler(BaseHTTPRequestHandler):
         server_version = "Azan/" + __version__
@@ -236,6 +246,8 @@ def make_handler(app):
                 if self.command in ("GET", "HEAD"):
                     if parsed.path in ("/", "/index.html"):
                         return self._static("index.html", "text/html; charset=utf-8")
+                    if parsed.path in STATIC_FILES:
+                        return self._static(parsed.path[1:], STATIC_FILES[parsed.path])
                     if parsed.path.startswith("/audio/"):
                         return self._audio(urllib.parse.unquote(parsed.path[7:]))
                 self.close_connection = True
@@ -255,6 +267,7 @@ def make_handler(app):
         # ── files ───────────────────────────────────────────────────────
 
         def _static(self, name, content_type):
+            name = name.replace("-precomposed", "")
             with open(os.path.join(paths.STATIC_DIR, name), "rb") as f:
                 self._send(200, f.read(), content_type)
 
