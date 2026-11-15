@@ -1,7 +1,5 @@
-from datetime import datetime
+"""Azan Automation — prayer-time Azan player with a local web interface."""
 
+__version__ = "2.0.0"
 
-def log(*args, **kwargs):
-    """Print with YYYY-MM-DD HH:MM:SS timestamp prefix."""
-    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}]", *args, **kwargs, flush=True)
+PRAYERS = ("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha")

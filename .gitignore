@@ -1,4 +1,6 @@
-# Local configuration (may contain secrets)
+# Settings and state live on the device, never in Git
+data/
+config.yaml
 config.local.yaml
 
 # Python
@@ -8,6 +10,7 @@ __pycache__/
 
 # Logs
 *.log
+*.log.*
 
 # OS
 .DS_Store

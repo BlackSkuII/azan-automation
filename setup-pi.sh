@@ -3,8 +3,8 @@
 # Run this on a FRESH Pi after flashing with Raspberry Pi Imager
 #
 # Usage:
-#   1. Flash Pi with Raspberry Pi Imager (enable SSH, set user: raspi / shafiq@123)
-#   2. SSH in: ssh raspi<IP>
+#   1. Flash Pi with Raspberry Pi Imager (enable SSH, set user: raspi and your own password)
+#   2. SSH in: ssh raspi@<IP>
 #   3. Copy this repo: scp -r /path/to/azan-automation raspi@<IP>:~/azan-automation
 #   4. Run: cd ~/azan-automation && chmod +x setup-pi.sh && ./setup-pi.sh
 #
@@ -16,7 +16,7 @@
 #   - Enables rpi-connect with auto-restart
 #   - Installs ZeroTier and joins network
 #   - Adds SSH public key for passwordless login
-#   - Runs the azan-automation installer
+#   - Runs setup.sh (installs the azan service + web page on port 9090)
 #
 # After this: authorize the new ZeroTier device at my.zerotier.com
 
@@ -103,22 +103,6 @@ else
     ok "/tmp and /var/log added to tmpfs"
 fi
 
-# ---- 4b. Azan log rotation ----
-if [ -f /etc/logrotate.d/azan ]; then
-    ok "Logrotate already configured"
-else
-    sudo tee /etc/logrotate.d/azan > /dev/null <<'EOF'
-/home/raspi/azan-automation/azan.log {
-    weekly
-    rotate 1
-    missingok
-    notifempty
-    compress
-}
-EOF
-    ok "Azan log rotation: weekly, keep only current"
-fi
-
 # ---- 5. rpi-connect ----
 step "5/8 Enable rpi-connect with auto-restart"
 sudo loginctl enable-linger raspi 2>/dev/null || true
@@ -166,9 +150,6 @@ fi
 
 # ---- 8. Azan installer ----
 step "8/8 Run azan-automation installer"
-echo "This is interactive — you'll need to answer prompts."
-echo "Press Enter to start the installer, or Ctrl+C to skip."
-read -r
 cd ~/azan-automation
 chmod +x setup.sh
 ./setup.sh
@@ -185,4 +166,6 @@ echo "ZeroTier device ID: $(sudo zerotier-cli info 2>/dev/null | awk '{print $3}
 echo ""
 echo "Verify with:"
 echo "  ssh raspi@<ZEROTIER_IP>"
+echo ""
+echo "Then open the web page shown above (port 9090) to choose your speaker."
 echo ""
