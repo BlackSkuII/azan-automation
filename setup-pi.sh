@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Pi Zero 2 W one-shot setup script
-# Run this on a FRESH Pi after flashing with Raspberry Pi Imager
+# Pi Zero 2 W housekeeping script — OPTIONAL.
+#
+# The app itself is installed with one command (install.sh) and is then set up
+# entirely in the browser, so this script is only for the Pi-level tweaks that
+# a web page cannot make. Run it on a freshly flashed Pi if you want them.
 #
 # Usage:
 #   1. Flash Pi with Raspberry Pi Imager (enable SSH, set user: raspi and your own password)
@@ -16,7 +19,7 @@
 #   - Enables rpi-connect with auto-restart
 #   - Installs ZeroTier and joins network
 #   - Adds SSH public key for passwordless login
-#   - Runs setup.sh (installs the azan service + web page on port 9090)
+#   - Runs install.sh (the service + web page; the browser does the rest)
 #
 # After this: authorize the new ZeroTier device at my.zerotier.com
 
@@ -149,10 +152,15 @@ else
 fi
 
 # ---- 8. Azan installer ----
-step "8/8 Run azan-automation installer"
+step "8/8 Install the azan service"
 cd ~/azan-automation
-chmod +x setup.sh
-./setup.sh
+if [ -x ./install.sh ]; then
+    ./install.sh
+else
+    echo "  Run the one-command installer, then open the page it prints:"
+    echo ""
+    echo "    curl -fsSL https://raw.githubusercontent.com/BlackSkuII/azan-automation/main/install.sh | bash"
+fi
 
 echo ""
 echo "========================================="
@@ -167,5 +175,6 @@ echo ""
 echo "Verify with:"
 echo "  ssh raspi@<ZEROTIER_IP>"
 echo ""
-echo "Then open the web page shown above (port 9090) to choose your speaker."
+echo "Then open the web page shown above (port 9090) — it walks you"
+echo "through the rest: masjid, speaker, recording and a test azan."
 echo ""

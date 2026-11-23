@@ -33,6 +33,9 @@ DEFAULTS = {
     "ha_url": "",
     "ha_token": "",
     "tv_entity_id": "",
+    # Set when the first-run setup in the web page is finished. A device that
+    # already has a settings file is treated as set up (see SettingsStore.load).
+    "setup_complete": False,
     # Per-prayer switches; offset is minutes after (+) / before (-) the adhan time
     "prayers": {name: {"enabled": True, "offset": 0} for name in PRAYERS},
 }
@@ -100,7 +103,7 @@ def validate(patch, audio_exists=None):
                     if not 0 <= number <= 100:
                         raise ValueError
                     clean[key] = number
-            elif key == "reboot_if_missing":
+            elif key in ("reboot_if_missing", "setup_complete"):
                 if not isinstance(value, bool):
                     raise ValueError
                 clean[key] = value
@@ -264,10 +267,18 @@ class SettingsStore:
                         saved = validate(saved, audio_exists=lambda name: True)
                     except SettingsError:
                         saved = {}
+                # Settings were saved before the setup wizard existed, so this
+                # device is already configured — do not send it through setup.
+                upgraded = "setup_complete" not in saved
+                if upgraded:
+                    saved["setup_complete"] = True
                 self._data = _merge(DEFAULTS, saved)
+                if upgraded:
+                    self._save()
                 return
             imported = _import_legacy() if self.path == paths.SETTINGS_FILE else None
             if imported:
+                imported["setup_complete"] = True  # a v1 config is already set up
                 self._data = _merge(DEFAULTS, imported)
                 self._save()
                 log.info("Imported settings from the old config.yaml.")

@@ -24,13 +24,36 @@ azan-automation/
 ├── audio/                # Azan MP3 files
 ├── data/                 # settings.json, times.json, state.json (git-ignored)
 ├── tests/                # unittest suite, no network/speaker needed
-├── setup.sh              # install/update: venv, systemd unit, removes v1 cron
-├── setup-pi.sh           # Pi one-shot setup (for fresh re-flashes)
+├── install.sh            # one-command install/update: code, venv, systemd unit
+├── setup-pi.sh           # optional Pi housekeeping (fresh re-flashes only)
 └── wifi-logger.sh        # WiFi event logger (NM dispatcher)
 ```
 
 Settings are edited in the web UI and stored only on the Pi
 (`data/settings.json`). Never add settings files to Git.
+
+## Install and First-Run Setup
+
+There is no terminal-based app setup any more. `install.sh` is the only
+command a user runs (`curl … | bash` or `./install.sh` in a checkout); it
+fetches the code, builds the venv, installs `catt` + `mutagen`, writes the
+systemd unit and starts the service. Everything else happens in the browser.
+
+- On first load the page calls `GET /api/status`; when
+  `setup_complete` is `false` it shows the full-screen setup flow in
+  `static/index.html` (5 steps: masjid, speaker, recording/volume, TV pause,
+  test). Each Next saves through `POST /api/settings`; Finish calls
+  `POST /api/setup {"complete": true}`.
+- `setup_complete` is a normal settings key (`settings.DEFAULTS`, validated as
+  a bool). A settings file saved before the wizard existed is upgraded to
+  `setup_complete: true` on load, so existing/Pi devices never see the wizard;
+  a v1 `config.yaml` import is marked complete too.
+- A corrupt or missing `settings.json` on a real install therefore lands in the
+  wizard — that is intended, it is how the device gets configured again.
+- Settings → Setup → **Run setup again** reopens the wizard without clearing
+  anything (it prefills from the saved settings).
+- Keep the wizard's step list, `SETUP_STEPS`, in sync with `App.setup` and the
+  README's setup table when adding fields.
 
 ## Prayer Times Source
 Aladhan API, fixed masjid location (no device GPS): `latitude=42.3601`,
@@ -72,6 +95,15 @@ ssh raspi@10.147.18.185 "free -h && df -h /"
 sudo systemctl restart azan
 sudo journalctl -u azan -n 50
 ```
+
+### Install / Update
+```bash
+curl -fsSL https://raw.githubusercontent.com/BlackSkuII/azan-automation/main/install.sh | bash   # fresh Pi
+cd ~/azan-automation && git pull && ./install.sh                                                 # update
+```
+The installer only handles code + packages + the systemd unit. Speaker,
+recording, volumes, masjid and TV are configured in the browser (first run
+opens the setup wizard automatically).
 Web UI: `http://192.168.1.5:9090`
 
 ## Gotchas
@@ -112,7 +144,7 @@ For fresh Pi re-flashes, run `setup-pi.sh` which handles:
 - rpi-connect auto-restart
 - ZeroTier install + join
 - SSH key added
-- `setup.sh` run (service + web UI on port 9090)
+- `install.sh` run (service + web UI on port 9090)
 
 After setup: authorize ZeroTier device at my.zerotier.com
 

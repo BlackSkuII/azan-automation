@@ -108,6 +108,18 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.store.get()["ha_token"], "s3cret")
         self.assertEqual(self.call("GET", "/api/settings")[1]["volume"], 45)
 
+    def test_setup_completion_is_reported_and_saved(self):
+        self.assertFalse(self.store.get()["setup_complete"])
+        self.assertFalse(self.call("GET", "/api/status")[1]["setup_complete"])
+        self.assertEqual(self.call("POST", "/api/setup", {})[0], 400)
+        self.assertEqual(self.call("POST", "/api/setup", {"complete": "yes"})[0], 400)
+        self.assertFalse(self.store.get()["setup_complete"])
+        status, data = self.call("POST", "/api/setup", {"complete": True})
+        self.assertEqual(status, 200)
+        self.assertTrue(data["setup_complete"])
+        self.assertTrue(self.store.get()["setup_complete"])
+        self.assertTrue(self.call("GET", "/api/status")[1]["setup_complete"])
+
     def test_invalid_settings_report_fields(self):
         status, data = self.call("POST", "/api/settings", {"volume": 400})
         self.assertEqual(status, 400)
