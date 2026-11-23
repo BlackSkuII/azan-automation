@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 
-from azan import PRAYERS, paths
+from azan import PRAYERS, paths, system
 
 log = logging.getLogger("azan")
 
@@ -36,6 +36,8 @@ DEFAULTS = {
     # Set when the first-run setup in the web page is finished. A device that
     # already has a settings file is treated as set up (see SettingsStore.load).
     "setup_complete": False,
+    # Tell this phone (its Wi-Fi MAC) when an azan fails to play
+    "notify_mac": "",
     # Per-prayer switches; offset is minutes after (+) / before (-) the adhan time
     "prayers": {name: {"enabled": True, "offset": 0} for name in PRAYERS},
 }
@@ -103,6 +105,15 @@ def validate(patch, audio_exists=None):
                     if not 0 <= number <= 100:
                         raise ValueError
                     clean[key] = number
+            elif key == "notify_mac":
+                text = str(value if value is not None else "").strip()
+                if text:
+                    mac = system.normalize_mac(text)
+                    if mac is None:
+                        errors[key] = "Must look like aa:bb:cc:dd:ee:ff"
+                        continue
+                    text = mac
+                clean[key] = text
             elif key in ("reboot_if_missing", "setup_complete"):
                 if not isinstance(value, bool):
                     raise ValueError

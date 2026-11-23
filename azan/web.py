@@ -9,11 +9,14 @@ import json
 import logging
 import os
 import re
+import threading
 import urllib.parse
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from azan import __version__, audio, cast, paths, system, tv_control
+from azan.notifications import NotificationStore
 from azan.settings import SettingsError
 
 log = logging.getLogger("azan")
@@ -31,10 +34,14 @@ class ApiError(Exception):
 class App:
     """Everything the request handlers need."""
 
-    def __init__(self, store, scheduler, player):
+    def __init__(self, store, scheduler, player, notifications=None,
+                 mac_lookup=None):
         self.store = store
         self.scheduler = scheduler
         self.player = player
+        self.notes = notifications or NotificationStore()
+        self.mac_lookup = mac_lookup or system.mac_for_ip
+        self._request = threading.local()  # one client IP per request thread
 
     # Each handler returns a JSON-serialisable object.
 
@@ -66,6 +73,35 @@ class App:
         except SettingsError as exc:
             raise ApiError("Some settings are not valid", fields=exc.errors)
         return self.get_settings(None, None)
+
+    def notify(self, _body, _query):
+        """Notifications waiting for the phone chosen by its MAC address."""
+        settings = self.store.get()
+        wanted = settings["notify_mac"]
+        # Always report this device's MAC so Settings can offer it.
+        mac = self.mac_lookup(self.client_ip())
+        target = bool(wanted and mac and mac == wanted)
+        today = self.today()
+        items = self.notes.take_today(today) if target else []
+        return {"enabled": bool(wanted), "is_target": target, "this_mac": mac,
+                "date": today, "notifications": items}
+
+    def notify_test(self, _body, _query):
+        """Queue (and, for the chosen phone, show) a test notification."""
+        now = datetime.now()
+        self.notes.record("test", now.strftime("%H:%M:%S"), "Test notification",
+                          now, today=self.today())
+        return self.notify(None, None)
+
+    def today(self):
+        """Today's date where the masjid is."""
+        return self.scheduler.local(self.scheduler.now()).date().isoformat()
+
+    def set_client_ip(self, ip):
+        self._request.ip = ip
+
+    def client_ip(self):
+        return getattr(self._request, "ip", None)
 
     def setup(self, body, _query):
         """Mark the first-run setup (done in the browser) as finished."""
@@ -169,6 +205,8 @@ ROUTES = {
     ("GET", "/api/settings"): "get_settings",
     ("POST", "/api/settings"): "save_settings",
     ("POST", "/api/setup"): "setup",
+    ("GET", "/api/notifications"): "notify",
+    ("POST", "/api/notifications/test"): "notify_test",
     ("GET", "/api/devices"): "devices",
     ("POST", "/api/check"): "check",
     ("POST", "/api/play"): "play",
@@ -244,6 +282,7 @@ def make_handler(app):
             return body
 
         def _dispatch(self):
+            app.set_client_ip(self.client_address[0])
             parsed = urllib.parse.urlsplit(self.path)
             query = dict(urllib.parse.parse_qsl(parsed.query))
             try:

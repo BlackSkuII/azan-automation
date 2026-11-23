@@ -8,6 +8,7 @@ import sys
 import threading
 
 from azan import __version__, paths, system
+from azan.notifications import NotificationStore
 from azan.player import Player
 from azan.scheduler import Scheduler
 from azan.settings import SettingsStore
@@ -44,9 +45,16 @@ def main(argv=None):
     log = setup_logging()
 
     store = SettingsStore()
+    notes = NotificationStore()
     player = Player(store)
     scheduler = Scheduler(store, player)
     store.on_change(scheduler.settings_changed)
+
+    # A failed azan waits in data/notifications.json until the phone chosen in
+    # Settings asks for it (see web.App.notify), so nothing is lost if the
+    # phone is off the network at the time.
+    player.on_result = lambda label, ok, message: notes.record_failure(
+        label, ok, message, scheduler.local(scheduler.now()))
 
     try:
         server = make_server(App(store, scheduler, player), args.host, args.port)

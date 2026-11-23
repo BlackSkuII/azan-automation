@@ -15,6 +15,7 @@ STATIC_DIR = os.path.join(ROOT, "azan", "static")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 TIMES_FILE = os.path.join(DATA_DIR, "times.json")
 STATE_FILE = os.path.join(DATA_DIR, "state.json")
+NOTIFICATION_FILE = os.environ.get("AZAN_NOTIFICATION_FILE") or os.path.join(DATA_DIR, "notifications.json")
 
 # Config files from version 1 (imported once, then left alone).
 LEGACY_CONFIG_FILES = (

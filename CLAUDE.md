@@ -17,12 +17,13 @@ azan-automation/
 │   ├── player.py         # pause TV → volume → cast (with retries) → restore
 │   ├── cast.py           # catt CLI wrapper (scan, status, volume, cast, stop)
 │   ├── prayer_times.py   # Aladhan API (masjid's exact query)
-│   ├── settings.py       # data/settings.json: defaults, validation, v1 import
+│   ├── settings.py       # data/settings.json: defaults, validation, notify MAC
 │   ├── audio.py          # audio/ listing, upload, MP3 duration
 │   ├── tv_control.py     # Home Assistant TV pause/resume
-│   └── system.py         # Pi detection, guarded reboot, LAN IP
+│   ├── notifications.py  # queue of failed azans for the phone chosen by MAC
+│   └── system.py         # Pi detection, guarded reboot, LAN IP, MAC lookup
 ├── audio/                # Azan MP3 files
-├── data/                 # settings.json, times.json, state.json (git-ignored)
+├── data/                 # settings/times/state/notifications.json (git-ignored)
 ├── tests/                # unittest suite, no network/speaker needed
 ├── install.sh            # one-command install/update: code, venv, systemd unit
 ├── setup-pi.sh           # optional Pi housekeeping (fresh re-flashes only)
@@ -54,6 +55,31 @@ systemd unit and starts the service. Everything else happens in the browser.
   anything (it prefills from the saved settings).
 - Keep the wizard's step list, `SETUP_STEPS`, in sync with `App.setup` and the
   README's setup table when adding fields.
+
+## Failure Notifications
+
+A scheduled azan that fails is queued by `notifications.NotificationStore`
+(`data/notifications.json`) through `Player.on_result`, wired in
+`__main__.py`. Delivery is pulled, not pushed: the phone chosen by
+`notify_mac` in Settings calls `GET /api/notifications`, the Pi verifies the
+request's source MAC (`system.mac_for_ip`, from `/proc/net/arp`, falling back
+to `arp -n`) and only then releases the queue.
+
+Rules that must not regress (covered by `tests/test_notifications.py` and
+`tests/test_web.py`):
+- the same `(date, kind, prayer)` is never queued twice, and delivered entries
+  are never handed out again — reconnects/reloads repeat nothing;
+- anything not delivered by the time `App.today()` (masjid-local date) changes
+  is dropped, so yesterday's azan is never announced today;
+- test azans and manually stopped ones never queue;
+- `POST /api/notifications/test` queues a throwaway entry (kind `test`).
+
+Limits to keep in mind: this is an in-page notification — a phone browser
+cannot be woken over the LAN, and system notifications need a secure context,
+so on `http://<pi>:9090` the user gets the banner and Android/iOS get no
+system notification. iPhones/Androids may use a private Wi-Fi MAC; the MAC
+must be the one the router sees, and `/api/notifications` returns
+`this_mac`/`is_target` so Settings can offer it.
 
 ## Prayer Times Source
 Aladhan API, fixed masjid location (no device GPS): `latitude=42.3601`,
