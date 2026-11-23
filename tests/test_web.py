@@ -4,9 +4,11 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+from datetime import datetime
 from unittest import mock
 
 from azan import audio, paths
+from azan.notifications import NotificationStore
 from azan.scheduler import Scheduler
 from azan.web import App, make_server
 from tests.helpers import temp_store
@@ -47,11 +49,15 @@ class WebTests(unittest.TestCase):
             patch.start()
             self.addCleanup(patch.stop)
         self.player = FakePlayer()
+        self.notes = NotificationStore(os.path.join(self.dir, "notifications.json"))
+        self.client_mac = "aa:bb:cc:dd:ee:ff"
         scheduler = Scheduler(self.store, self.player,
                               fetch=lambda *a: {"times": {}, "timezone": None},
                               times_file=os.path.join(self.dir, "t.json"),
                               state_file=os.path.join(self.dir, "s.json"))
-        self.server = make_server(App(self.store, scheduler, self.player), "127.0.0.1", 0)
+        self.app = App(self.store, scheduler, self.player, notifications=self.notes,
+                       mac_lookup=lambda ip: self.client_mac)
+        self.server = make_server(self.app, "127.0.0.1", 0)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
@@ -119,6 +125,46 @@ class WebTests(unittest.TestCase):
         self.assertTrue(data["setup_complete"])
         self.assertTrue(self.store.get()["setup_complete"])
         self.assertTrue(self.call("GET", "/api/status")[1]["setup_complete"])
+
+    def test_notifications_need_a_chosen_phone(self):
+        status, data = self.call("GET", "/api/notifications")
+        self.assertEqual(status, 200)
+        self.assertFalse(data["enabled"])
+        self.assertFalse(data["is_target"])
+        self.assertEqual(data["notifications"], [])
+        self.assertEqual(data["this_mac"], "aa:bb:cc:dd:ee:ff")
+
+    def test_the_chosen_phone_gets_a_failure_once(self):
+        self.store.update({"notify_mac": "aa:bb:cc:dd:ee:ff"})
+        self.notes.record_failure("Fajr azan", False, "speaker did not respond",
+                                  datetime.now())
+        status, data = self.call("GET", "/api/notifications")
+        self.assertEqual(status, 200)
+        self.assertTrue(data["is_target"])
+        self.assertEqual([n["prayer"] for n in data["notifications"]], ["Fajr"])
+        # Reconnecting or reloading does not repeat it.
+        self.assertEqual(self.call("GET", "/api/notifications")[1]["notifications"], [])
+
+    def test_another_phone_is_not_given_the_notification(self):
+        self.store.update({"notify_mac": "11:22:33:44:55:66"})
+        self.notes.record_failure("Fajr azan", False, "boom", datetime.now())
+        data = self.call("GET", "/api/notifications")[1]
+        self.assertFalse(data["is_target"])
+        self.assertEqual(data["notifications"], [])
+        self.assertEqual(len(self.notes.pending(data["date"])), 1)  # still waiting
+
+    def test_a_test_notification_is_queued_and_shown_to_the_chosen_phone(self):
+        self.store.update({"notify_mac": "aa:bb:cc:dd:ee:ff"})
+        status, data = self.call("POST", "/api/notifications/test", {})
+        self.assertEqual(status, 200)
+        self.assertEqual([n["kind"] for n in data["notifications"]], ["test"])
+        self.assertEqual(self.call("GET", "/api/notifications")[1]["notifications"], [])
+
+    def test_notifications_from_an_earlier_day_are_not_delivered(self):
+        self.store.update({"notify_mac": "aa:bb:cc:dd:ee:ff"})
+        self.notes.record_failure("Fajr azan", False, "boom",
+                                  datetime(2020, 1, 1, 5, 12))
+        self.assertEqual(self.call("GET", "/api/notifications")[1]["notifications"], [])
 
     def test_invalid_settings_report_fields(self):
         status, data = self.call("POST", "/api/settings", {"volume": 400})

@@ -18,7 +18,7 @@ MAX_UNKNOWN_DURATION = 600
 
 class Player:
     def __init__(self, store, cast=cast_module, tv=tv_control,
-                 clock=time.monotonic, sleep=time.sleep):
+                 clock=time.monotonic, sleep=time.sleep, on_result=None):
         self.store = store
         self.cast = cast
         self.tv = tv
@@ -28,6 +28,7 @@ class Player:
         self._stop = threading.Event()
         self._now_playing = None
         self.last_result = None
+        self.on_result = on_result  # told about every finished playback
 
     # ── public ──────────────────────────────────────────────────────────
 
@@ -65,6 +66,11 @@ class Player:
             self._busy.release()
         self.last_result = {"label": label, "ok": ok, "message": message,
                             "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        if self.on_result is not None:
+            try:
+                self.on_result(label, ok, message)
+            except Exception:  # a notification must never break playback
+                log.exception("Notification hook failed")
         return ok
 
     # ── internals ───────────────────────────────────────────────────────

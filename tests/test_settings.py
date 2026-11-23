@@ -37,6 +37,15 @@ class ValidateTests(unittest.TestCase):
     def test_unknown_keys_are_ignored(self):
         self.assertEqual(validate({"surprise": 1}), {})
 
+    def test_notify_mac_is_normalised_and_validated(self):
+        self.assertEqual(validate({"notify_mac": "AA-BB-CC-DD-EE-FF"}),
+                         {"notify_mac": "aa:bb:cc:dd:ee:ff"})
+        self.assertEqual(validate({"notify_mac": "  "}), {"notify_mac": ""})
+        with self.assertRaises(SettingsError) as ctx:
+            validate({"notify_mac": "not-a-mac"})
+        self.assertIn("notify_mac", ctx.exception.errors)
+        self.assertIn("aa:bb:cc:dd:ee:ff", ctx.exception.errors["notify_mac"])
+
     def test_setup_flag_must_be_a_bool(self):
         self.assertEqual(validate({"setup_complete": True}), {"setup_complete": True})
         with self.assertRaises(SettingsError) as ctx:

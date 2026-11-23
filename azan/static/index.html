@@ -128,6 +128,11 @@ pre.log { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Conso
 .toast.bad { background: #8a2a24; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
 .dot.on { background: var(--ok); } .dot.offl { background: var(--red); }
+/* Notifications about failed azans, above the page content */
+#alerts:not(:empty) { padding: 14px 16px 0; }
+#alerts { max-width: 720px; margin: 0 auto; }
+#alerts .note { margin-bottom: 0; }
+#alerts .note + .note { margin-top: 10px; }
 /* First-run setup: a full-screen flow that covers the page until it is done */
 .setup { position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--ink);
   overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 40px;
@@ -189,6 +194,8 @@ body.setup-open .savebar { display: none; }
     </nav>
   </div>
 </header>
+
+<div id="alerts" aria-live="polite"></div>
 
 <main class="wrap">
   <!-- ───────── Today ───────── -->
@@ -296,6 +303,26 @@ body.setup-open .savebar { display: none; }
       <div class="field"><span class="flabel">TV entity</span>
         <div class="inline"><input type="text" data-key="tv_entity_id" id="tv_entity_id" placeholder="media_player.living_room_tv" autocomplete="off" aria-label="TV entity"><button id="btn-ha">Find</button></div>
         <div id="ha-results"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Notifications</h2>
+      <div class="small">If an azan fails to play, the phone below is told the next time it opens this page — once, and only on the same day.</div>
+      <label class="field" style="margin-top:12px"><span>Phone's Wi-Fi (MAC) address</span>
+        <div class="inline">
+          <input type="text" data-key="notify_mac" id="notify_mac" placeholder="aa:bb:cc:dd:ee:ff" autocomplete="off" aria-label="Phone Wi-Fi MAC address">
+          <button type="button" id="btn-use-mac">Use this device</button>
+        </div>
+        <div class="hint" id="notify-this-mac">Open this page on the phone itself to read its address.</div>
+        <div class="err" data-err="notify_mac"></div>
+      </label>
+      <div class="row" style="border:0;padding-top:0">
+        <div class="grow"><div class="flabel" style="margin:0">Notifications on this phone</div>
+          <div class="small" id="notify-perm">Checking…</div></div>
+        <button class="mini" type="button" id="btn-notify-perm">Allow</button>
+      </div>
+      <div class="actions"><button class="mini" type="button" id="btn-notify-test">Send a test</button></div>
+      <div class="hint">iPhones and Androids can use a private Wi-Fi address. If this page shows one, use the address your router lists for this phone.</div>
     </div>
 
     <div class="card">
@@ -738,6 +765,94 @@ $("#btn-reboot").addEventListener("click", e => {
   busy(e.currentTarget, "Restarting…", async () => { await api("POST", "/api/reboot"); toast("The Pi is restarting"); });
 });
 
+/* ───────── Notifications ───────── */
+/* Errors are queued on the Pi and handed over only to the phone chosen by MAC
+   in Settings; the server marks them delivered, so reconnecting or reloading
+   never repeats one, and anything older than today is dropped. */
+let notifyState = null;
+const seenNotifications = new Set();
+
+function notificationTitle(item) {
+  return item.kind === "test" ? "Test notification" : item.prayer + " azan did not play";
+}
+
+function showNotification(item) {
+  const at = item.at ? item.at.slice(11, 16) : "";
+  const el = note(item.kind === "test" ? "good" : "bad",
+    notificationTitle(item) + (at ? " · " + at : "") + " — " + item.message,
+    h("button", {class: "mini", onclick: () => el.remove()}, "Dismiss"));
+  $("#alerts").append(el);
+  toast(notificationTitle(item), item.kind !== "test");
+  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+    try { new Notification(notificationTitle(item), {body: item.message, tag: "azan-" + item.id}); }
+    catch (e) { /* some browsers only allow this from a service worker */ }
+  }
+}
+
+function updateNotifySettings(state) {
+  if (!state) return;
+  const device = $("#notify-this-mac");
+  if (state.this_mac) {
+    device.replaceChildren(
+      h("span", null, "This device is " + state.this_mac + ". "),
+      h("button", {type: "button", class: "mini", onclick: useThisMac}, "Use this address"));
+  } else {
+    device.textContent = "Couldn't read this device's MAC — open this page on the phone itself.";
+  }
+  const perm = $("#notify-perm");
+  if (typeof Notification === "undefined") {
+    perm.textContent = "This browser cannot show system notifications; alerts appear in the page.";
+    $("#btn-notify-perm").hidden = true;
+  } else if (Notification.permission === "granted") {
+    perm.textContent = state.is_target ? "Allowed — this is the phone that gets them." : "Allowed.";
+    $("#btn-notify-perm").hidden = true;
+  } else if (Notification.permission === "denied") {
+    perm.textContent = "Blocked in this browser's settings.";
+    $("#btn-notify-perm").hidden = true;
+  } else {
+    perm.textContent = "Allow this page to show system notifications.";
+    $("#btn-notify-perm").hidden = false;
+  }
+}
+
+async function checkNotifications() {
+  if (document.hidden) return;
+  try { notifyState = await api("GET", "/api/notifications"); }
+  catch (e) { return; }
+  updateNotifySettings(notifyState);
+  for (const item of notifyState.notifications || []) {
+    if (seenNotifications.has(item.id)) continue;
+    seenNotifications.add(item.id);
+    showNotification(item);
+  }
+}
+
+function useThisMac() {
+  if (!notifyState || !notifyState.this_mac) return;
+  $("#notify_mac").value = notifyState.this_mac;
+  onFormInput();
+  toast("Address filled in — press Save");
+}
+
+$("#btn-notify-perm").addEventListener("click", async () => {
+  try { await Notification.requestPermission(); } catch (e) {}
+  updateNotifySettings(notifyState);
+});
+$("#btn-notify-test").addEventListener("click", e => busy(e.currentTarget, "Sending…", async () => {
+  const r = await api("POST", "/api/notifications/test", {});
+  notifyState = r;
+  updateNotifySettings(r);
+  if (r.notifications && r.notifications.length) {
+    for (const item of r.notifications) { seenNotifications.add(item.id); showNotification(item); }
+  } else if (!r.enabled) {
+    throw new Error("Set the phone's MAC address first");
+  } else if (!r.is_target) {
+    toast("Queued — it appears on the phone whose MAC you set");
+  } else {
+    toast("Nothing new to show");
+  }
+}));
+
 /* ───────── First-run setup ───────── */
 /* Five short steps, all in the browser. Each Next saves through the normal
    settings API, so a refresh never loses work; Finish sets setup_complete and
@@ -1054,9 +1169,13 @@ $("#btn-setup").addEventListener("click", () => openSetup());
 buildSettingsForm();
 loadSettings();
 loadStatus();
+checkNotifications();
 setInterval(() => { if (!document.hidden) { loadStatus(); if (currentTab === "activity") loadLog(); } }, 5000);
 setInterval(renderCountdown, 1000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) loadStatus(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { loadStatus(); checkNotifications(); }
+});
+setInterval(checkNotifications, 15000);
 const startTab = location.hash.slice(1);
 if (["settings", "audio", "activity"].includes(startTab)) showTab(startTab);
 </script>

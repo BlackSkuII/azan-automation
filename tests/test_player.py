@@ -101,6 +101,29 @@ class PlayerTests(unittest.TestCase):
         self.assertFalse(player.play("Test"))
         self.assertEqual(cast.calls, [])
 
+    def test_every_finished_playback_is_reported_to_the_callback(self):
+        seen = []
+        cast = FakeCast([FakeProc([1], "Error: boom") for _ in range(3)], volume=22)
+        player = self.player(cast)
+        player.on_result = lambda label, ok, message: seen.append((label, ok, message))
+        self.assertFalse(player.play("Asr azan"))
+        self.assertEqual(seen, [("Asr azan", False, "boom")])
+
+        cast = FakeCast([FakeProc([RUNNING] * 10 + [0])])
+        player = self.player(cast)
+        player.on_result = lambda label, ok, message: seen.append((label, ok, message))
+        self.assertTrue(player.play("Dhuhr azan"))
+        self.assertEqual(seen[-1], ("Dhuhr azan", True, "Played"))
+
+    def test_a_broken_callback_cannot_break_playback(self):
+        cast = FakeCast([FakeProc([RUNNING] * 10 + [0])])
+        player = self.player(cast)
+
+        def broken(label, ok, message):
+            raise RuntimeError("nope")
+        player.on_result = broken
+        self.assertTrue(player.play("Dhuhr azan"))
+
     def test_unreadable_volume_is_left_alone(self):
         cast = FakeCast([FakeProc([RUNNING] * 10 + [0])], volume=None)
         self.player(cast).play("Asr azan")

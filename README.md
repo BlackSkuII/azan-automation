@@ -14,7 +14,7 @@ http://<your-pi's-ip>:9090
 | Tab | What's there |
 |-----|--------------|
 | **Today** | Today's azan times, countdown to the next one, on/off switch per prayer, test buttons, speaker check |
-| **Settings** | Speaker (with a *Find* button), volumes, per-prayer time shift, masjid location and calculation method, TV pause |
+| **Settings** | Speaker (with a *Find* button), volumes, per-prayer time shift, masjid location and calculation method, TV pause, notifications |
 | **Audio** | Listen to, upload, choose and delete azan recordings |
 | **Activity** | What happened and when (played, failed, speaker not found…) |
 
@@ -75,6 +75,36 @@ Each step is saved as you go, so closing the browser does not lose progress.
 that already has `data/settings.json` is treated as set up and goes straight to
 the normal page.
 
+### Notifications when an azan fails
+
+If a scheduled azan cannot play, the Pi queues a note. The next time the chosen
+phone opens this page — which means it is on your Wi-Fi — a banner appears
+above the times (and a system notification too, if you allowed them under
+*Settings → Notifications*). The rules:
+
+- **One phone, chosen by its Wi-Fi (MAC) address** in *Settings →
+  Notifications*. **Use this device** fills in the address of the phone in
+  your hand.
+- **Sent once.** A delivered error never repeats, even if the phone reconnects
+  or the page is reloaded.
+- **Same day only.** If the phone does not show up before the masjid's local
+  date changes, the error is dropped and never sent.
+- A failed *test* azan, or one you stopped yourself, is not a notification.
+
+The queue is kept in `data/notifications.json`, so an error logged at Fajr is
+still waiting if the phone only joins the Wi-Fi at lunchtime.
+
+Two practical notes:
+
+- The page has to be open (or the home-screen app opened) to receive it — a
+  phone browser cannot be woken by the Pi, and phones only allow system
+  notifications on HTTPS pages, so on a plain `http://` address you get the
+  in-page banner.
+- Phones often use a *private* Wi-Fi address that is not their hardware MAC.
+  Use the address your router lists for the phone (or switch private
+  addressing off for your home network); the page shows what it sees when you
+  open it on that phone.
+
 ### Upgrading from version 1 (cron + `config.yaml`)
 
 Keep your old settings by putting `config.yaml` aside while you pull:
@@ -124,6 +154,8 @@ Things it takes care of:
   clock is set to another zone.
 - **Speaker missing** — optionally restarts the Pi, which fixes a silently
   dropped Wi-Fi connection (at most once per 15 minutes of uptime).
+- **A failed azan** — the phone you choose (by its Wi-Fi MAC address) is told
+  the next time it opens the page, once, and never after that day is over.
 
 ### Prayer times
 
@@ -175,7 +207,8 @@ azan/
 ├── settings.py      data/settings.json: defaults, validation, v1 import
 ├── audio.py         files in audio/, upload, MP3 length
 ├── tv_control.py    Home Assistant pause/resume
-└── system.py        Pi detection, restart, IP address
+├── notifications.py queue of failed azans for the chosen phone
+└── system.py        Pi detection, restart, IP address, MAC lookup
 audio/               azan recordings (MP3)
 data/                settings and state — on the device only, not in Git
 install.sh           one-command installer / updater (code, packages, service)
