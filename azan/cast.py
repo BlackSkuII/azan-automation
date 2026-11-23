@@ -24,7 +24,7 @@ def catt_path():
     for candidate in candidates:
         if candidate and os.path.isfile(candidate):
             return candidate
-    raise CastError("catt is not installed — run ./setup.sh")
+    raise CastError("catt is not installed — run ./install.sh")
 
 
 def _run(args, timeout=30):

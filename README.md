@@ -34,17 +34,46 @@ personal ends up on GitHub.
 
 ## Install
 
+One command on the Pi:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BlackSkuII/azan-automation/main/install.sh | bash
+```
+
+If you would rather keep the checkout yourself:
+
 ```bash
 git clone https://github.com/BlackSkuII/azan-automation.git
 cd azan-automation
-./setup.sh
+./install.sh
 ```
 
-`setup.sh` installs the Python packages, makes the service start on boot, and
-prints the address of the web page. Open it, press **Find** under
-*Settings → Speaker*, choose your speaker, and save. That's all.
+The installer does only what a web page cannot do: it fetches the code,
+creates the Python environment, installs `catt` and `mutagen`, makes the
+service start on boot and prints the web page address. **Everything else is
+done in the browser.** Open that address on your phone or computer and the
+page walks you through it — nothing needs to be typed into the Pi.
 
-Run `./setup.sh` again after every `git pull`; it is safe to repeat.
+After a `git pull`, run `./install.sh` once more (or paste the one-liner
+again); it is safe to repeat and picks up new packages and code.
+
+### Setup in the browser
+
+A device that has not been set up yet opens a short setup flow instead of the
+normal page:
+
+| Step | What you do |
+|------|-------------|
+| **Masjid** | Name, latitude/longitude, calculation method and Asr school |
+| **Speaker** | **Find speakers** scans the network and lists what it sees — tap yours |
+| **Recording** | Pick the azan and Fajr MP3s (or upload one) and set the volumes |
+| **TV pause** | Optional: Home Assistant address, token and media player |
+| **Try it** | Play the azan on the speaker, then finish |
+
+Each step is saved as you go, so closing the browser does not lose progress.
+*Settings → Setup → Run setup again* reopens the same flow later, and a device
+that already has `data/settings.json` is treated as set up and goes straight to
+the normal page.
 
 ### Upgrading from version 1 (cron + `config.yaml`)
 
@@ -56,13 +85,14 @@ mv config.yaml /tmp/config.yaml
 git checkout -- config.yaml
 git pull
 mv /tmp/config.yaml config.yaml
-./setup.sh
+./install.sh
 ```
 
 On first start the service imports `config.yaml` (and the Home Assistant token
 from `config.local.yaml`) into `data/settings.json`. After that the old files
-are not read again and can be deleted. `setup.sh` also removes the old cron
-jobs. If you skip this, just enter your speaker and volumes on the web page.
+are not read again and can be deleted. The installer also removes the old cron
+jobs. An imported v1 configuration counts as set up, so the browser setup flow
+is skipped — *Settings → Setup → Run setup again* opens it if you want it.
 
 ## How it works
 
@@ -129,7 +159,7 @@ venv/bin/python -m azan --port 9090             # run by hand (stop the service 
 venv/bin/python -m unittest discover -s tests -t .   # tests (no network or speaker needed)
 ```
 
-To use another port, run `AZAN_PORT=8080 ./setup.sh`.
+To use another port, run `AZAN_PORT=8080 ./install.sh`.
 
 ## Project layout
 
@@ -148,8 +178,8 @@ azan/
 └── system.py        Pi detection, restart, IP address
 audio/               azan recordings (MP3)
 data/                settings and state — on the device only, not in Git
-setup.sh             install / update
-setup-pi.sh          one-shot preparation of a freshly flashed Pi
+install.sh           one-command installer / updater (code, packages, service)
+setup-pi.sh          optional Pi housekeeping (tmpfs, journald, HDMI, ZeroTier…)
 wifi-logger.sh       optional Wi-Fi event logger (NetworkManager dispatcher)
 ```
 

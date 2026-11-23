@@ -45,6 +45,7 @@ class App:
             "version": __version__,
             "masjid_name": s["masjid_name"],
             "device_name": s["device_name"],
+            "setup_complete": s["setup_complete"],
             "player": self.player.status(),
             "tv_control": tv_control.configured(s),
         })
@@ -64,6 +65,14 @@ class App:
             self.store.update(body)
         except SettingsError as exc:
             raise ApiError("Some settings are not valid", fields=exc.errors)
+        return self.get_settings(None, None)
+
+    def setup(self, body, _query):
+        """Mark the first-run setup (done in the browser) as finished."""
+        if body.get("complete") is not True:
+            raise ApiError("Expected {\"complete\": true}")
+        self.store.update({"setup_complete": True})
+        log.info("Setup finished in the web page.")
         return self.get_settings(None, None)
 
     def devices(self, _body, _query):
@@ -159,6 +168,7 @@ ROUTES = {
     ("GET", "/api/status"): "status",
     ("GET", "/api/settings"): "get_settings",
     ("POST", "/api/settings"): "save_settings",
+    ("POST", "/api/setup"): "setup",
     ("GET", "/api/devices"): "devices",
     ("POST", "/api/check"): "check",
     ("POST", "/api/play"): "play",

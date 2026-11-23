@@ -128,11 +128,55 @@ pre.log { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Conso
 .toast.bad { background: #8a2a24; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
 .dot.on { background: var(--ok); } .dot.offl { background: var(--red); }
+/* First-run setup: a full-screen flow that covers the page until it is done */
+.setup { position: fixed; inset: 0; z-index: 20; background: var(--bg); color: var(--ink);
+  overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 16px 40px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(40px + env(safe-area-inset-bottom)); outline: none; }
+.setup[hidden] { display: none; }
+body.setup-open { overflow: hidden; }
+body.setup-open .savebar { display: none; }
+.setup-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.setup-brand { font-size: 12px; font-weight: 650; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.setup-step { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.setup-bar { height: 4px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 10px; }
+.setup-bar i { display: block; height: 100%; width: 0; background: var(--green-2); transition: width .25s; }
+.setup h2.title { font-size: 27px; font-weight: 700; line-height: 1.15; margin: 22px 0 8px;
+  text-transform: none; letter-spacing: 0; color: var(--ink); }
+.setup .intro { color: var(--muted); font-size: 15px; margin: 0 0 18px; }
+.setup .card { margin-bottom: 14px; }
+.setup .card .pname { margin-bottom: 4px; }
+.setup-nav { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
+.setup-nav .grow { flex: 1; }
+.setup-foot { text-align: center; margin-top: 16px; }
+.setup .picklist button { min-height: 0; }
+.setup .file { border-top: 0; padding: 0; }
 @media (max-width: 420px) { .two { grid-template-columns: 1fr; } .hero .name { font-size: 30px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
+<!-- First-run setup. Shown instead of the page until POST /api/setup completes. -->
+<div id="setup" class="setup" role="dialog" aria-modal="true" aria-labelledby="setup-title" tabindex="-1" hidden>
+  <div class="wrap">
+    <div class="setup-top">
+      <div class="setup-brand">Azan · setup</div>
+      <div class="setup-step" id="setup-step"></div>
+    </div>
+    <div class="setup-bar" aria-hidden="true"><i id="setup-progress"></i></div>
+    <h2 class="title" id="setup-title"></h2>
+    <p class="intro" id="setup-intro"></p>
+    <div id="setup-body"></div>
+    <div class="setup-nav">
+      <button id="setup-back" type="button">Back</button>
+      <span class="grow"></span>
+      <button id="setup-skip" type="button" class="mini" hidden>Skip</button>
+      <button id="setup-next" type="button" class="primary">Next</button>
+    </div>
+    <div class="small setup-foot">You can change all of this later in Settings.</div>
+  </div>
+</div>
+
 <header>
   <div class="wrap">
     <div class="top"><h1 id="title">Azan</h1><div class="clock" id="clock"></div></div>
@@ -252,6 +296,12 @@ pre.log { margin: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Conso
       <div class="field"><span class="flabel">TV entity</span>
         <div class="inline"><input type="text" data-key="tv_entity_id" id="tv_entity_id" placeholder="media_player.living_room_tv" autocomplete="off" aria-label="TV entity"><button id="btn-ha">Find</button></div>
         <div id="ha-results"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Setup</h2>
+      <div class="small">Walk through the first-time setup again: masjid, speaker, recording, volume and a test azan.</div>
+      <div class="actions"><button id="btn-setup">Run setup again</button></div>
     </div>
   </section>
 
@@ -479,6 +529,8 @@ async function loadStatus() {
   } catch (e) { offline = true; }
   if (status) renderStatus();
   else $("#notes").replaceChildren(note("bad", "Can't reach the Pi — is it on and on this network?"));
+  // A fresh install has nothing configured yet: finish setup before the page.
+  if (status && status.setup_complete === false && !setupOpen) openSetup();
 }
 
 async function togglePrayer(name, enabled) {
@@ -685,6 +737,318 @@ $("#btn-reboot").addEventListener("click", e => {
   if (!confirm("Restart the Raspberry Pi now? It will be back in about two minutes.")) return;
   busy(e.currentTarget, "Restarting…", async () => { await api("POST", "/api/reboot"); toast("The Pi is restarting"); });
 });
+
+/* ───────── First-run setup ───────── */
+/* Five short steps, all in the browser. Each Next saves through the normal
+   settings API, so a refresh never loses work; Finish sets setup_complete and
+   the page appears. "Run setup again" in Settings reopens the same flow. */
+let setupOpen = false, setupIndex = 0, setupFiles = [];
+
+const SETUP_STEPS = [
+  {title: "Your masjid",
+   intro: "Prayer times come from the Aladhan API using your masjid's location and calculation method.",
+   build: setupMasjidStep, collect: setupMasjidValues},
+  {title: "Your speaker",
+   intro: "Choose the Google Home or Chromecast speaker that will play the azan. It must be on the same Wi-Fi as the Pi.",
+   build: setupSpeakerStep, collect: setupSpeakerValues},
+  {title: "The recording",
+   intro: "Choose which recording plays for the azan and for Fajr, and how loud it should be.",
+   build: setupSoundStep, collect: setupSoundValues},
+  {title: "Pause the TV",
+   intro: "Optional. If you use Home Assistant, your TV can be paused while the azan plays and resumed when it ends.",
+   optional: true, build: setupTvStep, collect: setupTvValues},
+  {title: "Try it",
+   intro: "Send the azan to your speaker now. If you hear it, setup is done.",
+   optional: true, build: setupTestStep, collect: null},
+];
+
+function setupKey(key) { return $('#setup [data-setup-key="' + key + '"]'); }
+function sInput(key, attrs) { return h("input", Object.assign({"data-setup-key": key}, attrs)); }
+function sField(label, input, hint, key) {
+  return h("label", {class: "field"}, h("span", null, label), input,
+    hint ? h("div", {class: "hint"}, hint) : null,
+    key ? h("div", {class: "err", "data-setup-err": key}) : null);
+}
+function sSlider(key, label, value) {
+  const out = h("output", null, String(value));
+  return h("div", {class: "field"}, h("span", {class: "flabel"}, label),
+    h("div", {class: "slider"},
+      h("input", {type: "range", min: 0, max: 100, value: value, id: "s-" + key,
+        "data-setup-key": key, "aria-label": label,
+        oninput: e => out.textContent = e.target.value}), out));
+}
+function sPickList(holder, items, onPick, emptyText) {
+  if (!items.length) { holder.replaceChildren(h("div", {class: "hint"}, emptyText)); return; }
+  holder.replaceChildren(h("div", {class: "picklist"}, items.map(it =>
+    h("button", {type: "button", onclick: () => { onPick(it); holder.replaceChildren(); }},
+      it.title, h("span", {class: "small"}, it.detail)))));
+}
+
+/* Step 1 — masjid and calculation */
+function setupMasjidStep(box) {
+  const s = saved || {};
+  const method = h("select", {"data-setup-key": "method", id: "s-method"},
+    METHODS.map(([v, t]) => h("option", {value: v}, t)));
+  const school = h("select", {"data-setup-key": "school", id: "s-school"},
+    h("option", {value: 1}, "Hanafi (later Asr)"),
+    h("option", {value: 0}, "Shafi / Maliki / Hanbali"));
+  box.replaceChildren(
+    sField("Masjid name", sInput("masjid_name", {type: "text", id: "s-masjid",
+      value: s.masjid_name || "", autocomplete: "off"}), "Shown at the top of the page.", "masjid_name"),
+    h("div", {class: "two"},
+      sField("Latitude", sInput("latitude", {type: "number", step: "any", id: "s-lat",
+        value: s.latitude, inputmode: "decimal"}), null, "latitude"),
+      sField("Longitude", sInput("longitude", {type: "number", step: "any", id: "s-lon",
+        value: s.longitude, inputmode: "decimal"}), null, "longitude")),
+    sField("Calculation method", method,
+      "Use the method your masjid publishes, so the azan matches its times."),
+    sField("Asr school", school, "Most masjids follow the Hanafi school."));
+  method.value = String(s.method);
+  school.value = String(s.school);
+}
+function setupMasjidValues() {
+  return {masjid_name: $("#s-masjid").value.trim(), latitude: $("#s-lat").value,
+          longitude: $("#s-lon").value, method: $("#s-method").value,
+          school: $("#s-school").value};
+}
+
+/* Step 2 — speaker */
+function setupSpeakerStep(box) {
+  const s = saved || {};
+  const input = sInput("device_name", {type: "text", id: "s-device", value: s.device_name || "",
+    autocomplete: "off", placeholder: "e.g. Living Room speaker"});
+  const find = h("button", {type: "button", id: "s-find"}, "Find speakers");
+  const results = h("div", {id: "s-devices"});
+  find.addEventListener("click", e => busy(e.currentTarget, "Searching…", async () => {
+    results.replaceChildren(h("div", {class: "hint"}, "Searching the network — this can take up to 30 seconds…"));
+    try {
+      const r = await api("GET", "/api/devices");
+      sPickList(results, r.devices.map(d => ({title: d.name,
+        detail: [d.model, d.ip].filter(Boolean).join(" · "), value: d.name})),
+        it => { input.value = it.value; input.classList.remove("bad"); },
+        "No speakers found. Check that it is on and on the same Wi-Fi as the Pi, then try again.");
+    } catch (err) { results.replaceChildren(); throw err; }
+  }));
+  box.replaceChildren(
+    h("label", {class: "field"}, h("span", null, "Speaker name or address"),
+      h("div", {class: "inline"}, input, find),
+      h("div", {class: "hint"}, "The name as it appears in the Google Home app is best — an IP address can change."),
+      h("div", {class: "err", "data-setup-err": "device_name"}), results));
+}
+function setupSpeakerValues() { return {device_name: $("#s-device").value.trim()}; }
+
+/* Step 3 — recording and volume */
+async function setupSoundStep(box) {
+  const s = saved || {};
+  const azan = h("select", {"data-setup-key": "azan_file", id: "s-azan"});
+  const fajr = h("select", {"data-setup-key": "fajr_azan_file", id: "s-fajr"});
+  const note = h("div", {class: "hint", id: "s-audio-note"});
+  const upload = h("input", {type: "file", id: "s-upload", accept: ".mp3,audio/mpeg",
+    "aria-label": "Choose an MP3 file"});
+  const uploadBtn = h("button", {type: "button", class: "mini", id: "s-upload-btn",
+    disabled: true}, "Upload MP3");
+
+  const refresh = async (keep) => {
+    setupFiles = (await api("GET", "/api/audio")).files;
+    const names = setupFiles.map(f => f.name);
+    const fill = (select, wanted) => select.replaceChildren(...setupFiles.map(f =>
+      h("option", {value: f.name}, f.name + " · " + fmtDuration(f.duration))));
+    fill(azan); fill(fajr);
+    azan.value = names.includes(keep.azan) ? keep.azan : (names[0] || "");
+    fajr.value = names.includes(keep.fajr) ? keep.fajr : (names[0] || "");
+    note.textContent = names.length ? "" : "No MP3 files on the Pi yet — upload one above.";
+  };
+
+  const afterMode = h("select", {id: "s-after-mode"},
+    h("option", {value: "restore"}, "Put the volume back to what it was"),
+    h("option", {value: "fixed"}, "Set the volume to a fixed level"));
+  afterMode.value = s.volume_after == null ? "restore" : "fixed";
+  const afterField = sSlider("volume_after", "Volume after the azan",
+    s.volume_after == null ? s.volume : s.volume_after);
+  afterField.hidden = s.volume_after == null;
+  afterMode.addEventListener("change", () => afterField.hidden = afterMode.value !== "fixed");
+
+  upload.addEventListener("change", () => uploadBtn.disabled = !upload.files.length);
+  uploadBtn.addEventListener("click", () => busy(uploadBtn, "Uploading…", async () => {
+    const file = upload.files[0];
+    if (!file) return;
+    if (file.size > 25 * 1048576) throw new Error("File is too large (25 MB maximum)");
+    await api("POST", "/api/audio?name=" + encodeURIComponent(file.name), file);
+    upload.value = "";
+    await refresh({azan: file.name, fajr: fajr.value});
+    toast("Uploaded " + file.name);
+  }).then(() => uploadBtn.disabled = !upload.files.length));
+
+  box.replaceChildren(
+    sField("Azan recording", azan, "Played for Dhuhr, Asr, Maghrib and Isha.", "azan_file"),
+    sField("Fajr recording", fajr, "Often a longer, quieter recording for Fajr.", "fajr_azan_file"),
+    h("div", {class: "field"}, h("span", {class: "flabel"}, "Add a recording"),
+      upload, h("div", {class: "actions"}, uploadBtn),
+      h("div", {class: "hint"}, "MP3 only, up to 25 MB. Its length is detected automatically."), note),
+    h("div", {class: "two"},
+      sSlider("volume", "Azan volume", s.volume),
+      sSlider("fajr_volume", "Fajr volume", s.fajr_volume)),
+    sField("After the azan", afterMode),
+    afterField);
+  await refresh({azan: s.azan_file, fajr: s.fajr_azan_file});
+}
+function setupSoundValues() {
+  if (!setupFiles.length) throw new Error("Upload an MP3 recording first");
+  return {azan_file: $("#s-azan").value, fajr_azan_file: $("#s-fajr").value,
+          volume: Number($("#s-volume").value), fajr_volume: Number($("#s-fajr_volume").value),
+          volume_after: $("#s-after-mode").value === "fixed"
+            ? Number($("#s-volume_after").value) : null};
+}
+
+/* Step 4 — TV pause (optional) */
+function setupTvStep(box) {
+  const s = saved || {};
+  const url = sInput("ha_url", {type: "url", id: "s-ha-url", value: s.ha_url || "",
+    autocomplete: "off", placeholder: "http://192.168.1.10:8123"});
+  const token = h("input", {type: "password", id: "s-ha-token", autocomplete: "new-password",
+    placeholder: s.ha_token_set ? "A token is saved — leave empty to keep it" : ""});
+  const entity = sInput("tv_entity_id", {type: "text", id: "s-ha-entity",
+    value: s.tv_entity_id || "", autocomplete: "off", placeholder: "media_player.living_room_tv"});
+  const find = h("button", {type: "button", id: "s-ha-find"}, "Find TVs");
+  const results = h("div", {id: "s-ha-results"});
+  find.addEventListener("click", e => busy(e.currentTarget, "Searching…", async () => {
+    results.replaceChildren(h("div", {class: "hint"}, "Asking Home Assistant…"));
+    try {
+      const r = await api("POST", "/api/ha/players",
+        {ha_url: url.value.trim(), ha_token: token.value.trim()});
+      sPickList(results, r.players.map(p => ({title: p.name, detail: p.id, value: p.id})),
+        it => { entity.value = it.value; entity.classList.remove("bad"); },
+        "Home Assistant has no media players.");
+    } catch (err) { results.replaceChildren(); throw err; }
+  }));
+  box.replaceChildren(
+    h("div", {class: "hint", style: "margin-bottom:14px"},
+      "Leave these empty if you do not use Home Assistant, then press Skip."),
+    sField("Home Assistant address", url, null, "ha_url"),
+    sField("Access token", token, "A long-lived access token from your Home Assistant profile."),
+    h("label", {class: "field"}, h("span", null, "TV"),
+      h("div", {class: "inline"}, entity, find),
+      h("div", {class: "hint"}, "The media_player entity to pause while the azan plays."),
+      h("div", {class: "err", "data-setup-err": "tv_entity_id"}), results));
+}
+function setupTvValues() {
+  const out = {ha_url: $("#s-ha-url").value.trim(),
+               tv_entity_id: $("#s-ha-entity").value.trim()};
+  const token = $("#s-ha-token").value.trim();
+  if (token) out.ha_token = token;
+  return out;
+}
+
+/* Step 5 — test */
+function setupTestStep(box) {
+  const s = saved || {};
+  box.replaceChildren(
+    h("div", {class: "card"},
+      h("div", {class: "pname"}, "Listen for it on your speaker"),
+      h("div", {class: "small"}, "The Pi pauses the TV, sets the volume and starts casting. It can take ten seconds to begin."),
+      h("div", {class: "actions"},
+        h("button", {type: "button", id: "s-test", onclick: e => testPlay(e.currentTarget, {fajr: false})}, "Play the azan"),
+        h("button", {type: "button", id: "s-test-fajr", onclick: e => testPlay(e.currentTarget, {fajr: true})}, "Play the Fajr azan"),
+        h("button", {type: "button", class: "mini danger", id: "s-stop", onclick: () => stopPlayback()}, "Stop")),
+      h("div", {class: "small"}, s.device_name ? "Speaker: " + s.device_name : "No speaker chosen")),
+    h("div", {class: "hint"}, "Nothing heard? Go back a step and check the speaker and the recording."));
+}
+
+/* Wizard navigation */
+function clearSetupErrors() {
+  $$("#setup .err").forEach(e => e.textContent = "");
+  $$("#setup input.bad, #setup select.bad").forEach(e => e.classList.remove("bad"));
+}
+function showSetupErrors(fields) {
+  let first = null;
+  for (const [key, message] of Object.entries(fields || {})) {
+    const slot = $('#setup [data-setup-err="' + key + '"]');
+    if (slot) slot.textContent = message;
+    const input = setupKey(key);
+    if (input) { input.classList.add("bad"); first = first || input; }
+  }
+  if (first) first.focus();
+}
+
+function setupNextLabel() {
+  return setupIndex === SETUP_STEPS.length - 1 ? "Finish setup" : "Next";
+}
+
+async function renderSetupStep() {
+  const step = SETUP_STEPS[setupIndex], last = setupIndex === SETUP_STEPS.length - 1;
+  $("#setup-step").textContent = "Step " + (setupIndex + 1) + " of " + SETUP_STEPS.length;
+  $("#setup-progress").style.width = ((setupIndex + 1) / SETUP_STEPS.length * 100) + "%";
+  $("#setup-title").textContent = step.title;
+  $("#setup-intro").textContent = step.intro;
+  $("#setup-back").disabled = setupIndex === 0;
+  $("#setup-skip").hidden = !step.optional;
+  $("#setup-next").textContent = setupNextLabel();
+  clearSetupErrors();
+  $("#setup-body").replaceChildren();
+  await step.build($("#setup-body"));
+  $("#setup").scrollTop = 0;
+}
+
+async function openSetup() {
+  if (setupOpen) return;
+  setupOpen = true;
+  setupIndex = 0;
+  if (!saved) await loadSettings();
+  $("#setup").hidden = false;
+  document.body.classList.add("setup-open");
+  $("#setup").focus();
+  try { await renderSetupStep(); }
+  catch (e) { toast(e.message, true); }
+}
+
+function closeSetup() {
+  setupOpen = false;
+  $("#setup").hidden = true;
+  document.body.classList.remove("setup-open");
+}
+
+$("#setup-back").addEventListener("click", async () => {
+  if (setupIndex === 0) return;
+  setupIndex -= 1;
+  await renderSetupStep();
+});
+$("#setup-skip").addEventListener("click", async () => {
+  if (setupIndex >= SETUP_STEPS.length - 1) return;
+  setupIndex += 1;
+  await renderSetupStep();
+});
+$("#setup-next").addEventListener("click", e => {
+  const button = e.currentTarget;
+  // busy() restores the old label afterwards, so put "Finish setup" back.
+  busy(button, "Saving…", async () => {
+    const step = SETUP_STEPS[setupIndex], last = setupIndex === SETUP_STEPS.length - 1;
+    clearSetupErrors();
+    if (step.collect) {
+      let patch;
+      try { patch = step.collect(); }
+      catch (err) { toast(err.message, true); return; }
+      try {
+        saved = await api("POST", "/api/settings", patch);
+      } catch (err) {
+        if (!err.fields) { toast(err.message, true); return; }
+        showSetupErrors(err.fields);
+        toast("Please fix the highlighted field", true);
+        return;
+      }
+      if (!dirty) fillSettings(saved);
+    }
+    if (last) {
+      await api("POST", "/api/setup", {complete: true});
+      closeSetup();
+      toast("You're all set");
+      await loadStatus();
+      return;
+    }
+    setupIndex += 1;
+    await renderSetupStep();
+  }).then(() => { if (setupOpen) button.textContent = setupNextLabel(); });
+});
+$("#btn-setup").addEventListener("click", () => openSetup());
 
 /* ───────── Start ───────── */
 buildSettingsForm();

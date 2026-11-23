@@ -37,6 +37,12 @@ class ValidateTests(unittest.TestCase):
     def test_unknown_keys_are_ignored(self):
         self.assertEqual(validate({"surprise": 1}), {})
 
+    def test_setup_flag_must_be_a_bool(self):
+        self.assertEqual(validate({"setup_complete": True}), {"setup_complete": True})
+        with self.assertRaises(SettingsError) as ctx:
+            validate({"setup_complete": "yes"})
+        self.assertIn("setup_complete", ctx.exception.errors)
+
 
 class StoreTests(unittest.TestCase):
     def setUp(self):
@@ -81,6 +87,23 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(got["device_name"], "Kitchen")
         self.assertEqual(got["volume"], settings.DEFAULTS["volume"])
 
+    def test_a_fresh_install_needs_the_browser_setup(self):
+        self.assertFalse(SettingsStore(self.path).get()["setup_complete"])
+
+    def test_settings_saved_before_the_wizard_are_already_set_up(self):
+        paths.write_json_atomic(self.path, {"device_name": "Den", "volume": 30})
+        store = SettingsStore(self.path)
+        self.assertTrue(store.get()["setup_complete"])
+        # The upgrade is written back, so it only happens once.
+        self.assertTrue(paths.read_json(self.path)["setup_complete"])
+
+    def test_an_unfinished_setup_stays_unfinished_across_restarts(self):
+        paths.write_json_atomic(self.path, {"device_name": "Den", "setup_complete": False})
+        self.assertFalse(SettingsStore(self.path).get()["setup_complete"])
+        store = SettingsStore(self.path)
+        store.update({"setup_complete": True})
+        self.assertTrue(SettingsStore(self.path).get()["setup_complete"])
+
 
 class LegacyImportTests(unittest.TestCase):
     V1 = ("masjid_name: Allston Brighton Islamic Center\nlatitude: 42.3601\n"
@@ -115,6 +138,7 @@ class LegacyImportTests(unittest.TestCase):
             self.assertEqual(got["azan_file"], "azan1.mp3")
             self.assertEqual(got["ha_token"], "secret-token")
             self.assertTrue(os.path.isfile(target))
+            self.assertTrue(got["setup_complete"])  # v1 users are not sent through setup
 
     def test_city_based_config_keeps_masjid_defaults(self):
         patch = settings.from_legacy({"city": "Gurgaon", "method": "1", "volume": "80"})
